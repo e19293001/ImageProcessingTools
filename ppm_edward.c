@@ -1,20 +1,21 @@
 // Edward Sillador
-// 03/01/2018
-
+// * 03/02/2018 - fixed crash in getNextPixel()
+//                index to the input file buffer exceeds the image file size
+//                getNextPixel() now returns error value.
 // * 03/01/2018 - the following are changes:
-// *               1. Added name and date
-// *               2. Format tab width from 2 to 4
-// *               3. Added argument in getNextToken(). This will return error value and
-// *                  the newly added parameter current_token will be the output of the
-// *                  function. 
-// *               4. Return int in doProcessPPM() for error value.
-// *               5. Return int in rotateGrayScaleImage() for error value.
-// *               6. Added error checking in the functions:
-// *                  - rotateGrayScaleImage
-// *                  - putImageToFile
-// *                  - getImageInfo
-// *                  - doProcessPPM
-// *               7. !Change! the rotation direction.
+// *              1. Added name and date
+// *              2. Format tab width from 2 to 4
+// *              3. Added argument in getNextToken(). This will return error value and
+// *                 the newly added parameter current_token will be the output of the
+// *                 function. 
+// *              4. Return int in doProcessPPM() for error value.
+// *              5. Return int in rotateGrayScaleImage() for error value.
+// *              6. Added error checking in the functions:
+// *                 - rotateGrayScaleImage
+// *                 - putImageToFile
+// *                 - getImageInfo
+// *                 - doProcessPPM
+// *              7. !Change! the rotation direction.
 // * 12/2017 - initial version
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,6 +42,7 @@ typedef struct img_info {
     unsigned int new_height;
     unsigned int new_width;
     unsigned int max_color;
+    unsigned int size;
     pixel **buff;
     pixel **new_buff;
 } img_info;
@@ -65,7 +67,7 @@ typedef struct ppm_image_handler {
 
 int getNextToken(ppm_image_handler *handler, token *current_token);
 void getNextChar(ppm_image_handler *handler);
-pixel getNextPixel(ppm_image_handler *handler);
+int getNextPixel(ppm_image_handler *handler, pixel *pix);
 int doProcessPPM(ppm_image_handler *handler);
 int getImageInfo(ppm_image_handler *handler);
 int rotateGrayScaleImage(ppm_image_handler *handler);
@@ -207,14 +209,19 @@ int putImageToFile(ppm_image_handler *handler) {
     return 0;
 }
 
-pixel getNextPixel(ppm_image_handler *handler) {
+int getNextPixel(ppm_image_handler *handler, pixel *pix) {
     pixel ret;
 
+    if (handler->index_buffer > handler->filesize) {
+        printf("error. unexpected end of file. file index: %0d exceeds file size: %0d\n", handler->index_buffer, handler->filesize);
+        return -1;
+    }
     ret.r = handler->file_buffer[handler->index_buffer++];
     ret.g = handler->file_buffer[handler->index_buffer++];
     ret.b = handler->file_buffer[handler->index_buffer++];
 
-    return ret;
+    *pix = ret;
+    return 0;
 }
 
 void getNextChar(ppm_image_handler *handler) {
@@ -336,6 +343,7 @@ int getImageInfo(ppm_image_handler *handler) {
         return -1;
     }
   
+    handler->imginfo.size = handler->imginfo.height * handler->imginfo.width;
     for (y = 0; y < handler->imginfo.height; y++) {
         handler->imginfo.buff[y] = (pixel *) malloc(handler->imginfo.width * sizeof(pixel));
         if (handler->imginfo.buff[y] == NULL) {
@@ -343,7 +351,9 @@ int getImageInfo(ppm_image_handler *handler) {
             return -1;
         }
         for (x = 0; x < handler->imginfo.width; x++) {
-            handler->imginfo.buff[y][x] = getNextPixel(handler);
+            if (getNextPixel(handler, &handler->imginfo.buff[y][x]) != 0) {
+                return -1;
+            }            
         }
     }
 
@@ -367,12 +377,12 @@ int doProcessPPM(ppm_image_handler *handler) {
     // initialize ppm_image_handler
     handler->filep = fopen(handler->filename, "rb");
     if (handler->filep == NULL) {
-        printf("error here. opening file\n");
+        printf("error. can not open file: %s\n", handler->filename);
         return -1;
     }
 
     if (fseek(handler->filep , 0 , SEEK_END) < 0) {
-        printf("error here. fseeking file\n");
+        printf("error. can not set file position in fseek.\n");
         return -1;
     }
     
@@ -390,7 +400,7 @@ int doProcessPPM(ppm_image_handler *handler) {
         return -1;
     }
 
-    // initialize variables for parsing
+    // initialize variables before parsing
     handler->index_buffer = 0;
     handler->tkn.current_char = '\n';
 
