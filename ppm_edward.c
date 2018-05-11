@@ -1,4 +1,5 @@
 // Edward Sillador
+// 03/01/2018
 // * 03/02/2018 - fixed crash in getNextPixel()
 //                index to the input file buffer exceeds the image file size
 //                getNextPixel() now returns error value.
