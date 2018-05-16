@@ -1,5 +1,6 @@
 // Edward Sillador
-// 03/01/2018
+// 05/16/2018
+// * 05/16/2018 - implement image resize
 // * 03/02/2018 - fixed crash in getNextPixel()
 //                index to the input file buffer exceeds the image file size
 //                getNextPixel() now returns error value.
@@ -18,6 +19,9 @@
 // *                 - doProcessPPM
 // *              7. !Change! the rotation direction.
 // * 12/2017 - initial version
+
+#define TEST_RESIZE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -31,6 +35,17 @@
 #define PPM_UNSIGNED 1
 #define PPM_EOF -1
 #define PPM_ERROR -2
+
+typedef struct img_scale_info {
+    int input_size;
+    int output_size;
+    float scale;
+    int kernel_width;
+    float **weights;
+    int **indices;
+    int P;
+    int num_non_zero;
+} img_scale_info;
 
 typedef struct pixel {
     unsigned char r;
@@ -49,6 +64,10 @@ typedef struct img_info {
     pixel **new_buff;
 } img_info;
 
+typedef struct args_flag {
+    char resize_enable;
+} args_flag;
+
 // this structure is used for parsing the header file
 typedef struct token{
     int kind;
@@ -59,6 +78,8 @@ typedef struct token{
 // contains PPM image information
 typedef struct ppm_image_handler {
     img_info imginfo;
+    args_flag arg_flag;
+    img_scale_info scale_info;
     FILE *filep;
     unsigned char* file_buffer;
     char *filename;
@@ -66,6 +87,12 @@ typedef struct ppm_image_handler {
     unsigned int index_buffer;
     token tkn;
 } ppm_image_handler;
+
+void calc_contributions(img_scale_info *scale_info);
+int mod(int a, int b);
+float cubic(float x);
+void init_img_scale_info(img_scale_info *scale_info);
+void release_scale_info(img_scale_info *scale_info);
 
 int getNextToken(ppm_image_handler *handler, token *current_token);
 void getNextChar(ppm_image_handler *handler);
@@ -75,22 +102,63 @@ int getImageInfo(ppm_image_handler *handler);
 int rotateGrayScaleImage(ppm_image_handler *handler);
 void releaseBuffer(ppm_image_handler *handler);
 
-int main(int argc, char **argv) {
+#ifdef TEST_RESIZE
+int main(int argc, char **argv)
+{
+    img_scale_info scale_info;
+    int x, y;
     ppm_image_handler handler;
-    if (argc != 2) {
+
+    //weights = (float **) malloc(output_size * sizeof(float*));
+    //indices = (int **) malloc(output_size * sizeof(int*));
+
+    handler.filename = argv[1];
+    handler.arg_flag.resize_enable = 1;
+
+    init_img_scale_info(&scale_info);
+
+    calc_contributions(&scale_info);
+
+    handler.scale_info = scale_info;
+
+    for (y = 0; y < scale_info.output_size; y++)
+    {
+        for (x = 0; x < scale_info.num_non_zero; x++)
+        {
+            printf("weights[%0d][%0d] : %0f\n", y, x, scale_info.weights[y][x]);
+        }
+    }
+
+    if (doProcessPPM(&handler) != 0)
+    {
+        return -1;
+    }
+
+    release_scale_info(&scale_info);
+    return 0;
+}
+#else
+int main(int argc, char **argv) 
+{
+    ppm_image_handler handler;
+    if (argc != 2)
+    {
         printf("invalid number of arguments: %0d\n", argc);
         printf("ppm_edward <file name>\n");
         return -1;
     }
     handler.filename = argv[1];
-    if (doProcessPPM(&handler) != 0) {
+    if (doProcessPPM(&handler) != 0)
+    {
         return -1;
     }
     return 0;
 }
+#endif
 
 // rotate and convert image to gray scale
-int rotateGrayScaleImage(ppm_image_handler *handler) {
+int rotateGrayScaleImage(ppm_image_handler *handler)
+{
     unsigned int x = 0;
     unsigned int y = 0;
 
@@ -98,19 +166,24 @@ int rotateGrayScaleImage(ppm_image_handler *handler) {
     handler->imginfo.new_width = handler->imginfo.height;
 
     handler->imginfo.new_buff = (pixel **) malloc(handler->imginfo.new_height * sizeof(pixel *));
-    if (handler->imginfo.new_buff == NULL) {
+    if (handler->imginfo.new_buff == NULL)
+    {
         return -1;
     }
   
-    for (y = 0; y < handler->imginfo.new_height; y++) {
+    for (y = 0; y < handler->imginfo.new_height; y++)
+    {
         handler->imginfo.new_buff[y] = (pixel *) malloc(handler->imginfo.new_width * sizeof(pixel));
-        if (handler->imginfo.new_buff[y] == NULL) {
+        if (handler->imginfo.new_buff[y] == NULL)
+        {
             return -1;
         }
     }
 
-    for (y = 0; y < handler->imginfo.height; y++) {
-        for (x = 0; x < handler->imginfo.width; x++) {
+    for (y = 0; y < handler->imginfo.height; y++)
+    {
+        for (x = 0; x < handler->imginfo.width; x++)
+        {
             unsigned int new_x;
             unsigned int new_y;
             unsigned char new_color;
@@ -128,7 +201,8 @@ int rotateGrayScaleImage(ppm_image_handler *handler) {
 }
 
 // write output image to file
-int putImageToFile(ppm_image_handler *handler) {
+int putImageToFile(ppm_image_handler *handler)
+{
     int fileout_size =  strlen(handler->filename) + 5;
     char fileout[MAX_HEADER_CHARS];
     FILE *fofp;
@@ -143,66 +217,78 @@ int putImageToFile(ppm_image_handler *handler) {
 
     img_sz = handler->imginfo.new_width * handler->imginfo.new_height;
 
-    if ((fofp = fopen(fileout, "wb")) == NULL) {
+    if ((fofp = fopen(fileout, "wb")) == NULL)
+    {
         printf("unable to open file for writing: %s\n", fileout);
         return -1;
     }
 
     error = fwrite("P6\n", 1, 3, fofp);
-    if (error != 3) {
+    if (error != 3)
+    {
         printf("Not a P6 format\n");
         return -1;
     }
 
     sprintf(fileout, "%s", "# generated by ppm_edward\n");
     error = fwrite(fileout, 1, strlen(fileout), fofp);
-    if (error != strlen(fileout)) {
+    if (error != strlen(fileout))
+    {
         printf("failed in writing to %s\n", fileout);
         return -1;
     }
 
     sprintf(fileout, "%u ", handler->imginfo.new_width);
     error = fwrite(fileout, 1, strlen(fileout), fofp);
-    if (error != strlen(fileout)) {
+    if (error != strlen(fileout))
+    {
         printf("failed in writing to %s\n", fileout);
         return -1;
     }
 
     sprintf(fileout, "%u\n", handler->imginfo.new_height);
     error = fwrite(fileout, 1, strlen(fileout), fofp);
-    if (error != strlen(fileout)) {
+    if (error != strlen(fileout))
+    {
         printf("failed in writing to %s\n", fileout);
         return -1;
     }
 
     sprintf(fileout, "%u\n", handler->imginfo.max_color);
     error = fwrite(fileout, 1, strlen(fileout), fofp);
-    if (error != strlen(fileout)) {
+    if (error != strlen(fileout))
+    {
         printf("failed in writing to %s\n", fileout);
         return -1;
     }
 
-    for (y = 0; y < handler->imginfo.new_height; y++) {
-        for (x = 0; x < handler->imginfo.new_width; x++) {
+    for (y = 0; y < handler->imginfo.new_height; y++)
+    {
+        for (x = 0; x < handler->imginfo.new_width; x++)
+        {
             error = fwrite(&handler->imginfo.new_buff[y][x].r,1, 1, fofp);
-            if (error != 1) {
+            if (error != 1)
+            {
                 printf("failed in writing to %s\n", fileout);
                 return -1;
             }
             error = fwrite(&handler->imginfo.new_buff[y][x].g,1, 1, fofp);
-            if (error != 1) {
+            if (error != 1)
+            {
                 printf("failed in writing to %s\n", fileout);
                 return -1;
             }
             error = fwrite(&handler->imginfo.new_buff[y][x].b,1, 1, fofp);
-            if (error != 1) {
+            if (error != 1)
+            {
                 printf("failed in writing to %s\n", fileout);
                 return -1;
             }
         }
     }
 
-    for (y = 0; y < handler->imginfo.new_height; y++) {
+    for (y = 0; y < handler->imginfo.new_height; y++)
+    {
         free(handler->imginfo.new_buff[y]);
     }
 
@@ -211,10 +297,12 @@ int putImageToFile(ppm_image_handler *handler) {
     return 0;
 }
 
-int getNextPixel(ppm_image_handler *handler, pixel *pix) {
+int getNextPixel(ppm_image_handler *handler, pixel *pix)
+{
     pixel ret;
 
-    if (handler->index_buffer > handler->filesize) {
+    if (handler->index_buffer > handler->filesize)
+    {
         printf("error. unexpected end of file. file index: %0d exceeds file size: %0d\n", handler->index_buffer, handler->filesize);
         return -1;
     }
@@ -226,22 +314,28 @@ int getNextPixel(ppm_image_handler *handler, pixel *pix) {
     return 0;
 }
 
-void getNextChar(ppm_image_handler *handler) {
-    if (handler->tkn.current_char == EOF) {
+void getNextChar(ppm_image_handler *handler)
+{
+    if (handler->tkn.current_char == EOF)
+    {
         return;
     }
 
-    if (handler->index_buffer < handler->filesize) {
+    if (handler->index_buffer < handler->filesize)
+    {
         handler->tkn.current_char = handler->file_buffer[handler->index_buffer++];
     }
-    else {
+    else
+    {
         handler->tkn.current_char = EOF;
     }
 
     // ignore comments
-    if (handler->tkn.current_char == '#') {
+    if (handler->tkn.current_char == '#')
+    {
         char next_char;
-        do {
+        do
+        {
             handler->tkn.current_char = handler->file_buffer[handler->index_buffer++];
             next_char = handler->file_buffer[handler->index_buffer];
         } while (handler->tkn.current_char != '\n');
@@ -249,26 +343,31 @@ void getNextChar(ppm_image_handler *handler) {
     }
 }
 
-int getNextToken(ppm_image_handler *handler, token *current_token) {
+int getNextToken(ppm_image_handler *handler, token *current_token)
+{
     // returns error for any invalid token
     handler->tkn.kind = PPM_ERROR;
 
     // ignore spaces
-    while (isspace(handler->tkn.current_char)) {
+    while (isspace(handler->tkn.current_char))
+    {
         getNextChar(handler);
     }
 
     // if token is a digit
-    if (isdigit(handler->tkn.current_char)) {
+    if (isdigit(handler->tkn.current_char))
+    {
         int index = 0;
         memset(&(handler->tkn.image), '\0', IMAGE_BUFLEN);
-        do {
+        do
+        {
             handler->tkn.image[index++] = handler->tkn.current_char;
             getNextChar(handler);
         } while (isdigit(handler->tkn.current_char));
         handler->tkn.kind = PPM_UNSIGNED;
     }
-    else if (isalpha(handler->tkn.current_char)) { // if token is a word
+    else if (isalpha(handler->tkn.current_char))
+    { // if token is a word
         int index = 0;
         do {
             handler->tkn.image[index++] = handler->tkn.current_char;
@@ -276,12 +375,14 @@ int getNextToken(ppm_image_handler *handler, token *current_token) {
         } while (isalnum(handler->tkn.current_char));
         handler->tkn.image[index] = '\0';
 
-        if ((strncmp(handler->tkn.image, "P6", IMAGE_BUFLEN)) == 0) {
+        if ((strncmp(handler->tkn.image, "P6", IMAGE_BUFLEN)) == 0)
+        {
             handler->tkn.kind = PPM_MAGIC_NUM;
         }
         getNextChar(handler);
     }
-    else { // return error for anything else
+    else
+    { // return error for anything else
         return -1;
     }
 
@@ -290,100 +391,106 @@ int getNextToken(ppm_image_handler *handler, token *current_token) {
 }
 
 // converts the buffer to 2 dimensional image
-int getImageInfo(ppm_image_handler *handler) {
+int getImageInfo(ppm_image_handler *handler)
+{
     token current_token;
     unsigned int x;
     unsigned int y;
     int error = 0;
 
     // retrieve the magic number
-    if ((error = getNextToken(handler, &current_token)) != 0) {
+    if ((error = getNextToken(handler, &current_token)) != 0)
+    {
         printf("error in getting next token. wrong format.\n");
         return -1;
     }
-    if (current_token.kind != PPM_MAGIC_NUM) {
+    if (current_token.kind != PPM_MAGIC_NUM)
+    {
         printf("error. invalid file format.\n");
         return -1;
     }
 
     // retrieve the width
-    if ((error = getNextToken(handler, &current_token)) != 0) {
+    if ((error = getNextToken(handler, &current_token)) != 0)
+    {
         printf("error in getting next token. wrong format.\n");
         return -1;
     }
-    if (current_token.kind != PPM_UNSIGNED) {
+    if (current_token.kind != PPM_UNSIGNED)
+    {
         printf("error. invalid file format. unable to parse width from input file.\n");
         return -1;
     }
     handler->imginfo.width = atoi(current_token.image);
 
     // retrieve the height
-    if ((error = getNextToken(handler, &current_token)) != 0) {
+    if ((error = getNextToken(handler, &current_token)) != 0)
+    {
         printf("error in getting next token. wrong format.\n");
         return -1;
     }
-    if (current_token.kind != PPM_UNSIGNED) {
+    if (current_token.kind != PPM_UNSIGNED)
+    {
         printf("error. invalid file format. unable to parse height from input file.\n");
         return -1;
     }
     handler->imginfo.height = atoi(current_token.image);
 
     // retrieve the maximum color
-    if ((error = getNextToken(handler, &current_token)) != 0) {
+    if ((error = getNextToken(handler, &current_token)) != 0)
+    {
         printf("error in getting next token. wrong format.\n");
         return -1;
     }
-    if (current_token.kind != PPM_UNSIGNED) {
+    if (current_token.kind != PPM_UNSIGNED)
+    {
         printf("error. invalid file format. unable to parse maximum color from input file.\n");
         return -1;
     }
     handler->imginfo.max_color = atoi(current_token.image);
   
     handler->imginfo.buff = (pixel **) malloc(handler->imginfo.height * sizeof(pixel *));
-    if (handler->imginfo.buff == NULL) {
+    if (handler->imginfo.buff == NULL)
+    {
         printf("error. can not allocate memory\n");
         return -1;
     }
   
     handler->imginfo.size = handler->imginfo.height * handler->imginfo.width;
-    for (y = 0; y < handler->imginfo.height; y++) {
+    for (y = 0; y < handler->imginfo.height; y++)
+    {
         handler->imginfo.buff[y] = (pixel *) malloc(handler->imginfo.width * sizeof(pixel));
-        if (handler->imginfo.buff[y] == NULL) {
+        if (handler->imginfo.buff[y] == NULL)
+        {
             printf("error. can not allocate memory\n");
             return -1;
         }
-        for (x = 0; x < handler->imginfo.width; x++) {
-            if (getNextPixel(handler, &handler->imginfo.buff[y][x]) != 0) {
+        for (x = 0; x < handler->imginfo.width; x++)
+        {
+            if (getNextPixel(handler, &handler->imginfo.buff[y][x]) != 0)
+            {
                 return -1;
             }            
         }
     }
 
-    if (handler->filesize != handler->index_buffer) {
+    if (handler->filesize != handler->index_buffer)
+    {
         printf("file format error\n");
     }
 
     return 0;
 }
 
-void releaseBuffer(ppm_image_handler *handler) {
+void releaseBuffer(ppm_image_handler *handler)
+{
     unsigned int y;
-    for (y = 0; y < handler->imginfo.height; y++) {
+    for (y = 0; y < handler->imginfo.height; y++)
+    {
         free(handler->imginfo.buff[y]);
     }
     free(handler->imginfo.buff);
 }
-
-typedef struct img_scale_info {
-    int input_size;
-    int output_size;
-    float scale;
-    int kernel_width;
-    float **weights;
-    int **indices;
-    int P;
-    int num_non_zero;
-} img_scale_info;
 
 float cubic(float x)
 {
@@ -430,7 +537,6 @@ void calc_contributions(img_scale_info *scale_info)
 
     for (y = 0; y < scale_info->output_size; y++)
     {
-        //printf("scale_info->P: %0d\n", scale_info->P);
         indices[y] = (float *) malloc(scale_info->P * sizeof(float));
         weights[y] = (float *) malloc(scale_info->P * sizeof(float));
 
@@ -452,13 +558,11 @@ void calc_contributions(img_scale_info *scale_info)
     y = 0;
     for (x = 0; x < scale_info->input_size; x++)
     {
-//        printf("x: %0d\n", x);
         aux[y++] = x;
     }
 
     for (x = scale_info->input_size-1; x >= 0; x--)
     {
-//        printf("x: %0d\n", x);
         aux[y++] = x;
     }
 
@@ -482,10 +586,7 @@ void calc_contributions(img_scale_info *scale_info)
         for (x = 0; x < scale_info->P; x++)
         {
             float u = ((y+1) / scale_info->scale) + (0.5 * (1 - (1 / scale_info->scale)));
-            //printf("x: %0d y: %0d u: %0f\n", x, y, u);
-            //printf("y: %0d x: %0d u: %0f indices[y][x]: %0f\n", y, x, u, indices[y][x]);
             weights[y][x] = cubic(u - indices[y][x] - 1);
-            //printf("ret_weights[y][x]: %0f\n", ret_weights[y][x]);
         }
     }
 
@@ -493,7 +594,6 @@ void calc_contributions(img_scale_info *scale_info)
     {
         for (x = 0; x < scale_info->P; x++)
         {
-            //printf("--- %0d\n", mod(((int) indices[y][x]), aux_size));
             indices[y][x] = aux[mod(((int) indices[y][x]),aux_size)];
         }
     }
@@ -502,7 +602,6 @@ void calc_contributions(img_scale_info *scale_info)
     {
         for (x = 0; x < scale_info->P; x++)
         {
-            //printf("indices[%0d][%0d] = %0f\n", y, x, indices[y][x]);
             printf("ret_weights[%0d][%0d] = %0f\n", y, x, weights[y][x]);
         }
     }
@@ -539,7 +638,6 @@ void calc_contributions(img_scale_info *scale_info)
                 ind_w_ptr_x = ind_w_ptr_x + 1;
             }
         }
-        
     }
 
     for (y = 0; y < scale_info->output_size; y++)
@@ -551,7 +649,6 @@ void calc_contributions(img_scale_info *scale_info)
     free(indices);
     free(aux);
 }
-
 
 void release_scale_info(img_scale_info *scale_info)
 {
@@ -574,16 +671,58 @@ void init_img_scale_info(img_scale_info *scale_info)
     scale_info->scale = 2;
 }
 
-int doProcessPPM(ppm_image_handler *handler) {
+int imresize(ppm_image_handler *handler)
+{
+    int x;
+    int y;
+
+    handler->imginfo.new_height = handler->imginfo.height;
+    handler->imginfo.new_width = handler->imginfo.width;
+
+
+    handler->imginfo.new_buff = (pixel **) malloc(handler->imginfo.height * sizeof(pixel *));
+    if (handler->imginfo.new_buff == NULL)
+    {
+        return -1;
+    }
+
+    for (y = 0; y < handler->imginfo.height; y++)
+    {
+        handler->imginfo.new_buff[y] = (pixel *) malloc(handler->imginfo.width * sizeof(pixel));
+        if (handler->imginfo.new_buff[y] == NULL)
+        {
+            return -1;
+        }
+    }
+  
+    for (y = 0; y < handler->imginfo.height; y++)
+    {
+        for (x = 0; x < handler->imginfo.width; x++)
+        {
+            handler->imginfo.new_buff[y][x].r = handler->imginfo.buff[y][x].r;
+            handler->imginfo.new_buff[y][x].g = handler->imginfo.buff[y][x].g;
+            handler->imginfo.new_buff[y][x].b = handler->imginfo.buff[y][x].b;
+        }
+    }
+    
+    printf("imresize\n");
+    return 0;
+}
+
+int doProcessPPM(ppm_image_handler *handler)
+{
     int retsz;
+
     // initialize ppm_image_handler
     handler->filep = fopen(handler->filename, "rb");
-    if (handler->filep == NULL) {
+    if (handler->filep == NULL)
+    {
         printf("error. can not open file: %s\n", handler->filename);
         return -1;
     }
 
-    if (fseek(handler->filep , 0 , SEEK_END) < 0) {
+    if (fseek(handler->filep , 0 , SEEK_END) < 0)
+    {
         printf("error. can not set file position in fseek.\n");
         return -1;
     }
@@ -592,12 +731,14 @@ int doProcessPPM(ppm_image_handler *handler) {
     handler->filesize = ftell(handler->filep);
     rewind(handler->filep);
     handler->file_buffer = (unsigned char*) malloc(sizeof(unsigned char) * handler->filesize);
-    if (handler->file_buffer == NULL) {
+    if (handler->file_buffer == NULL)
+    {
         printf("error. can not allocate memory\n");
         return -1;
     }
     retsz = fread(handler->file_buffer, 1, handler->filesize, handler->filep);
-    if (retsz != handler->filesize) {
+    if (retsz != handler->filesize)
+    {
         printf("error in reading input file.\n");
         return -1;
     }
@@ -607,19 +748,26 @@ int doProcessPPM(ppm_image_handler *handler) {
     handler->tkn.current_char = '\n';
 
     // get header file information
-    if (getImageInfo(handler) != 0) {
+    if (getImageInfo(handler) != 0)
+    {
         free(handler->file_buffer);
         fclose(handler->filep);
         return -1;
     }
   
-    // process the image
-    if (rotateGrayScaleImage(handler) != 0) {
-        return -1;
+//    // process the image
+//    if (rotateGrayScaleImage(handler) != 0)
+//    {
+//        return -1;
+//    }
+    if (handler->arg_flag.resize_enable)
+    {
+        imresize(handler);
     }
-
+        
     // write the processed image to file
-    if (putImageToFile(handler) != 0) {
+    if (putImageToFile(handler) != 0)
+    {
         free(handler->file_buffer);
         fclose(handler->filep);
         return -1;
