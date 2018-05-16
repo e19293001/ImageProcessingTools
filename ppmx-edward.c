@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <math.h>
 #include <string.h>
 
 #define IMAGE_BUFLEN 10
@@ -371,6 +372,206 @@ void releaseBuffer(ppm_image_handler *handler) {
         free(handler->imginfo.buff[y]);
     }
     free(handler->imginfo.buff);
+}
+
+typedef struct img_scale_info {
+    int input_size;
+    int output_size;
+    float scale;
+    int kernel_width;
+    float **weights;
+    int **indices;
+    int P;
+    int num_non_zero;
+} img_scale_info;
+
+float cubic(float x)
+{
+    float ret = 0;
+    float absx = fabs(x);
+    float absx2 = absx * absx;
+    float absx3 = absx2 * absx;
+    //printf("[cubic] x: %0f absx: %0f\n", x, absx);
+    if (absx < 1) 
+    {
+        ret = (1.5*absx3) - (2.5*absx2) + 1;
+    }
+    if ((1 < absx) && (absx <= 2))
+    {
+        ret = ret + ((-0.5*absx3) + (2.5*absx2) - (4*absx) + 2);
+    }
+    //printf("[cubic] ret: %0f\n", ret);
+            
+    return ret;
+}
+
+int mod(int a, int b)
+{
+    int r = a % b;
+    return r < 0 ? r + b : r;
+}
+
+void calc_contributions(img_scale_info *scale_info)
+{
+    int x = 0;
+    int y = 0;
+    int aux_size = scale_info->input_size * 2;
+    int *aux;
+    float **indices;
+    float **weights;
+
+    indices = (float **) malloc(scale_info->output_size * sizeof(float*));
+    weights = (float **) malloc(scale_info->output_size * sizeof(float*));
+
+    if (indices == NULL || weights == NULL) {
+        printf("fatal. allocating indices\n");
+        return;
+    }
+
+    for (y = 0; y < scale_info->output_size; y++)
+    {
+        //printf("scale_info->P: %0d\n", scale_info->P);
+        indices[y] = (float *) malloc(scale_info->P * sizeof(float));
+        weights[y] = (float *) malloc(scale_info->P * sizeof(float));
+
+        if (indices[y] == NULL)
+        {
+            printf("fatal. allocating indices");
+            return;
+        }
+        if (weights[y] == NULL)
+        {
+            printf("fatal. allocating weights");
+            return;
+        }
+    }
+
+    aux = (int *) malloc(aux_size * (sizeof(int)));
+    memset(aux, 0, aux_size);
+
+    y = 0;
+    for (x = 0; x < scale_info->input_size; x++)
+    {
+//        printf("x: %0d\n", x);
+        aux[y++] = x;
+    }
+
+    for (x = scale_info->input_size-1; x >= 0; x--)
+    {
+//        printf("x: %0d\n", x);
+        aux[y++] = x;
+    }
+
+    // generate indices
+    for (y = 0; y < scale_info->output_size; y++)
+    {
+        for (x = 0; x < scale_info->P; x++)
+        {
+            // generate an array from 1 to output_size
+            // divide each element to scale
+            float u = ((y+1) / scale_info->scale) + (0.5 * (1 - (1 / scale_info->scale)));
+            printf("u: %0f\n", u);
+            indices[y][x] = floor(u - (scale_info->kernel_width / 2)) + (x - 1);
+            //ret_weights[y][x] = floor(u - (kernel_width / 2)) + (x - 1);
+        }
+    }
+
+    // generate weights
+    for (y = 0; y < scale_info->output_size; y++)
+    {
+        for (x = 0; x < scale_info->P; x++)
+        {
+            float u = ((y+1) / scale_info->scale) + (0.5 * (1 - (1 / scale_info->scale)));
+            //printf("x: %0d y: %0d u: %0f\n", x, y, u);
+            //printf("y: %0d x: %0d u: %0f indices[y][x]: %0f\n", y, x, u, indices[y][x]);
+            weights[y][x] = cubic(u - indices[y][x] - 1);
+            //printf("ret_weights[y][x]: %0f\n", ret_weights[y][x]);
+        }
+    }
+
+    for (y = 0; y < scale_info->output_size; y++)
+    {
+        for (x = 0; x < scale_info->P; x++)
+        {
+            //printf("--- %0d\n", mod(((int) indices[y][x]), aux_size));
+            indices[y][x] = aux[mod(((int) indices[y][x]),aux_size)];
+        }
+    }
+
+    for (y = 0; y < scale_info->output_size; y++)
+    {
+        for (x = 0; x < scale_info->P; x++)
+        {
+            //printf("indices[%0d][%0d] = %0f\n", y, x, indices[y][x]);
+            printf("ret_weights[%0d][%0d] = %0f\n", y, x, weights[y][x]);
+        }
+    }
+
+    scale_info->num_non_zero = 0;
+    for (x = 0; x < scale_info->P; x++)
+    {
+        if (weights[0][x] != 0.0f)
+        {
+            scale_info->num_non_zero = scale_info->num_non_zero + 1;
+        }
+    }
+
+    printf("nonzero: %0d\n", scale_info->num_non_zero);
+    scale_info->indices = (int **) malloc(scale_info->output_size * sizeof(int*));
+    scale_info->weights = (float **) malloc(scale_info->output_size * sizeof(float*));
+    
+    for (y = 0; y < scale_info->output_size; y++)
+    {
+        scale_info->indices[y] = (int *) malloc(scale_info->num_non_zero * sizeof(int));
+        scale_info->weights[y] = (float *) malloc(scale_info->num_non_zero * sizeof(float));
+    }
+
+    int ind_w_ptr_x = 0;
+    for (y = 0; y < scale_info->output_size; y++)
+    {
+        ind_w_ptr_x = 0;
+        for (x = 0; x < scale_info->P; x++)
+        {
+            if (weights[y][x] != 0.0f)
+            {
+                scale_info->indices[y][ind_w_ptr_x] = indices[y][x];
+                scale_info->weights[y][ind_w_ptr_x] = weights[y][x];
+                ind_w_ptr_x = ind_w_ptr_x + 1;
+            }
+        }
+        
+    }
+
+    for (y = 0; y < scale_info->output_size; y++)
+    {
+        free(indices[y]);
+        free(weights[y]);
+    }
+    free(weights);
+    free(indices);
+    free(aux);
+}
+
+
+void release_scale_info(img_scale_info *scale_info)
+{
+    int y = 0;
+    for (y = 0; y < scale_info->output_size; y++)
+    {
+        free(scale_info->weights[y]);
+        free(scale_info->indices[y]);
+    }
+    free(scale_info->weights);
+    free(scale_info->indices);
+}
+
+void init_img_scale_info(img_scale_info *scale_info)
+{
+    scale_info->kernel_width = 4.0;
+    scale_info->P = scale_info->kernel_width + 2;
+    scale_info->input_size = 5;
+    scale_info->output_size = 10;
+    scale_info->scale = 2;
 }
 
 int doProcessPPM(ppm_image_handler *handler) {
