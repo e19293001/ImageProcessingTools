@@ -510,9 +510,8 @@ float cubic(float x)
 
 int mod(int a, int b)
 {
-    int r;
+    int r = 0;
     if (b != 0) r = a % b;
-    else r = a;
     return r < 0 ? r + b : r;
 }
 
@@ -736,48 +735,100 @@ int imresize(ppm_image_handler *handler)
             //handler->imginfo.new_buff[y][x].g = handler->imginfo.buff[y][x].g;
             //handler->imginfo.new_buff[y][x].b = handler->imginfo.buff[y][x].b;
 
+            int z;
             float sum_r = 0.0f;
             float sum_g = 0.0f;
             float sum_b = 0.0f;
-            int z;
 
             //printf("x = %0d y = %0d\n", y, x);
             //printf("handler->imginfo.buff[%0d][%0d].r: %0d\n", x, y, handler->imginfo.buff[y][x].r);
             //printf("handler->imginfo.buff[%0d][%0d].g: %0d\n", x, y, handler->imginfo.buff[y][x].g);
             //printf("handler->imginfo.buff[%0d][%0d].b: %0d\n", x, y, handler->imginfo.buff[y][x].b);
+
+//            if (x == 0)
+//            {
+//                printf("y: %0d [ ", y);
+//                for (z = 0; z < handler->scale_info.num_non_zero; z++)
+//                {
+//                    printf("%0f ", handler->scale_info.weights[x][z]);
+//                }
+//                printf("]\n");
+//                for (z = 0; z < handler->scale_info.num_non_zero; z++)
+//                {
+//                    int index = handler->scale_info.indices[x][z];
+//                    printf("   - index: %0d\n", index);
+//                    printf("   handler->imginfo.buff[%0d][%0d].r: %0d\n", y, index, handler->imginfo.buff[y][index].r);
+//                    printf("   handler->imginfo.buff[%0d][%0d].g: %0d\n", y, index, handler->imginfo.buff[y][index].g);
+//                    printf("   handler->imginfo.buff[%0d][%0d].b: %0d\n", y, index, handler->imginfo.buff[y][index].b);
+//                }
+//            }
+
             for (z = 0; z < handler->scale_info.num_non_zero; z++)
             {
-//                printf("---- x: %0d ---- z: %0d\n", x, z);
-                int index = handler->scale_info.indices[y][z];
+                int index = handler->scale_info.indices[x][z];
 //                printf("indices[%0d][%0d]: %0d weights[%0d][%0d]: %0f\n", x, z, handler->scale_info.indices[x][z], x, z, handler->scale_info.weights[x][z]);
 //                printf("handler->imginfo.buff[y][index].r: %0d\n", handler->imginfo.buff[y][index].r);
 //                printf("handler->imginfo.buff[y][index].g: %0d\n", handler->imginfo.buff[y][index].g);
 //                printf("handler->imginfo.buff[y][index].b: %0d\n", handler->imginfo.buff[y][index].b);
+
+                if (x == 112 && y == 26)
+                {
+                    printf("   --- sum_r + handler->imginfo.buff[y][index].r * handler->scale_info.weights[x][z] ---> %0f\n", handler->imginfo.buff[y][index].r * handler->scale_info.weights[x][z]);
+                }
                 sum_r = sum_r + handler->imginfo.buff[y][index].r * handler->scale_info.weights[x][z];
                 sum_g = sum_g + handler->imginfo.buff[y][index].g * handler->scale_info.weights[x][z];
                 sum_b = sum_b + handler->imginfo.buff[y][index].b * handler->scale_info.weights[x][z];
 
-                if (sum_r < 0.0f) sum_r = 0.0f;
-                if (sum_g < 0.0f) sum_g = 0.0f;
-                if (sum_b < 0.0f) sum_b = 0.0f;
-
-                if (sum_r > 256.0f) sum_r = 255.0f;
-                if (sum_g > 256.0f) sum_g = 255.0f;
-                if (sum_b > 256.0f) sum_b = 255.0f;
-
-                handler->imginfo.new_buff[y][index].r = (int) round(sum_r);
-                handler->imginfo.new_buff[y][index].g = (int) round(sum_g);
-                handler->imginfo.new_buff[y][index].b = (int) round(sum_b);
 //                printf("   --- handler->imginfo.new_buff[%0d][%0d].r: %0d\n", y, x, handler->imginfo.new_buff[y][x].r);
 //                printf("   --- handler->imginfo.new_buff[%0d][%0d].g: %0d\n", y, x, handler->imginfo.new_buff[y][x].g);
 //                printf("   --- handler->imginfo.new_buff[%0d][%0d].b: %0d\n", y, x, handler->imginfo.new_buff[y][x].b);
 
             }
+            if (x == 112 && y == 26)
+            {
+                printf("sum_r: %0f\n", sum_r);
+                if (sum_r < 0.0f)
+                {
+                    printf("< 0 true\n");
+                }
+                else
+                {
+                    printf("< 0 false\n");
+                }
+                if (sum_r >= 256.0f)
+                {
+                    printf(">= 256 true\n");
+                }
+                else
+                {
+                    printf(">= 256 false\n");
+                }
+            }
+
+            if (sum_r < 0.0f) sum_r = 0.0f;
+            if (sum_g < 0.0f) sum_g = 0.0f;
+            if (sum_b < 0.0f) sum_b = 0.0f;
+
+            if (sum_r >= 256) sum_r = 255.0f;
+            if (sum_g >= 256) sum_g = 255.0f;
+            if (sum_b >= 256) sum_b = 255.0f;
+
+            handler->imginfo.new_buff[y][x].r = (int) sum_r;
+            handler->imginfo.new_buff[y][x].g = (int) sum_g;
+            handler->imginfo.new_buff[y][x].b = (int) sum_b;
+
+            if (x == 112 && y == 26)
+            {
+                printf("   --- handler->imginfo.new_buff[%0d][%0d].r: %0d\n", y, x, handler->imginfo.new_buff[y][x].r);
+                printf("   --- handler->imginfo.new_buff[%0d][%0d].g: %0d\n", y, x, handler->imginfo.new_buff[y][x].g);
+                printf("   --- handler->imginfo.new_buff[%0d][%0d].b: %0d\n", y, x, handler->imginfo.new_buff[y][x].b);
+            }
+
             //if (x == 3) exit(0);
 
-            //printf("   result - r : %0f\n", handler->imginfo.buff[y][index].r * handler->scale_info.weights[y][x]);
-            //printf("   result - g : %0f\n", handler->imginfo.buff[y][index].g * handler->scale_info.weights[y][x]);
-            //printf("   result - b : %0f\n", handler->imginfo.buff[y][index].b * handler->scale_info.weights[y][x]);
+//            printf("   result - r : %0d\n", handler->imginfo.buff[y][index].r);
+//            printf("   result - g : %0d\n", handler->imginfo.buff[y][index].g);
+//            printf("   result - b : %0d\n", handler->imginfo.buff[y][index].b);
                 
 
             //printf("   --- sum_r: %0f\n", sum_r);
