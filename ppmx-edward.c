@@ -91,7 +91,7 @@ typedef struct ppm_image_handler {
 void calc_contributions(img_scale_info *scale_info);
 int mod(int a, int b);
 float cubic(float x);
-void init_img_scale_info(img_scale_info *scale_info);
+void init_img_scale_info(ppm_image_handler *handler);
 void release_scale_info(img_scale_info *scale_info);
 
 int getNextToken(ppm_image_handler *handler, token *current_token);
@@ -105,7 +105,6 @@ void releaseBuffer(ppm_image_handler *handler);
 #ifdef TEST_RESIZE
 int main(int argc, char **argv)
 {
-    img_scale_info scale_info;
     int x, y;
     ppm_image_handler handler;
 
@@ -115,26 +114,20 @@ int main(int argc, char **argv)
     handler.filename = argv[1];
     handler.arg_flag.resize_enable = 1;
 
-    init_img_scale_info(&scale_info);
 
-    calc_contributions(&scale_info);
-
-    handler.scale_info = scale_info;
-
-    for (y = 0; y < scale_info.output_size; y++)
-    {
-        for (x = 0; x < scale_info.num_non_zero; x++)
-        {
-            printf("weights[%0d][%0d] : %0f\n", y, x, scale_info.weights[y][x]);
-        }
-    }
+    //for (y = 0; y < scale_info.output_size; y++)
+    //{
+    //    for (x = 0; x < scale_info.num_non_zero; x++)
+    //    {
+    //        printf("weights[%0d][%0d] : %0f\n", y, x, scale_info.weights[y][x]);
+    //    }
+    //}
 
     if (doProcessPPM(&handler) != 0)
     {
         return -1;
     }
 
-    release_scale_info(&scale_info);
     return 0;
 }
 #else
@@ -262,6 +255,9 @@ int putImageToFile(ppm_image_handler *handler)
         return -1;
     }
 
+    printf("new_height: %0d\n", handler->imginfo.new_height);
+    printf("new_width: %0d\n", handler->imginfo.new_width);
+    
     for (y = 0; y < handler->imginfo.new_height; y++)
     {
         for (x = 0; x < handler->imginfo.new_width; x++)
@@ -292,8 +288,8 @@ int putImageToFile(ppm_image_handler *handler)
         free(handler->imginfo.new_buff[y]);
     }
 
-    free(handler->imginfo.new_buff);
     fclose(fofp);
+    free(handler->imginfo.new_buff);
     return 0;
 }
 
@@ -514,7 +510,9 @@ float cubic(float x)
 
 int mod(int a, int b)
 {
-    int r = a % b;
+    int r;
+    if (b != 0) r = a % b;
+    else r = a;
     return r < 0 ? r + b : r;
 }
 
@@ -522,7 +520,7 @@ void calc_contributions(img_scale_info *scale_info)
 {
     int x = 0;
     int y = 0;
-    int aux_size = scale_info->input_size * 2;
+    unsigned int aux_size = scale_info->input_size * 2;
     int *aux;
     float **indices;
     float **weights;
@@ -552,8 +550,8 @@ void calc_contributions(img_scale_info *scale_info)
         }
     }
 
-    aux = (int *) malloc(aux_size * (sizeof(int)));
-    memset(aux, 0, aux_size);
+    aux = (unsigned int *) malloc(aux_size * (sizeof(unsigned int)));
+    //memset(aux, 0, aux_size);
 
     y = 0;
     for (x = 0; x < scale_info->input_size; x++)
@@ -566,6 +564,11 @@ void calc_contributions(img_scale_info *scale_info)
         aux[y++] = x;
     }
 
+    for (x = 0; x < aux_size; x++)
+    {
+        printf("aux[%0d]: %0d\n", x, aux[x]);
+    }
+
     // generate indices
     for (y = 0; y < scale_info->output_size; y++)
     {
@@ -574,7 +577,7 @@ void calc_contributions(img_scale_info *scale_info)
             // generate an array from 1 to output_size
             // divide each element to scale
             float u = ((y+1) / scale_info->scale) + (0.5 * (1 - (1 / scale_info->scale)));
-            printf("u: %0f\n", u);
+            //printf("u: %0f\n", u);
             indices[y][x] = floor(u - (scale_info->kernel_width / 2)) + (x - 1);
             //ret_weights[y][x] = floor(u - (kernel_width / 2)) + (x - 1);
         }
@@ -595,14 +598,6 @@ void calc_contributions(img_scale_info *scale_info)
         for (x = 0; x < scale_info->P; x++)
         {
             indices[y][x] = aux[mod(((int) indices[y][x]),aux_size)];
-        }
-    }
-
-    for (y = 0; y < scale_info->output_size; y++)
-    {
-        for (x = 0; x < scale_info->P; x++)
-        {
-            printf("ret_weights[%0d][%0d] = %0f\n", y, x, weights[y][x]);
         }
     }
 
@@ -642,6 +637,22 @@ void calc_contributions(img_scale_info *scale_info)
 
     for (y = 0; y < scale_info->output_size; y++)
     {
+        for (x = 0; x < scale_info->num_non_zero; x++)
+        {
+            printf("scale_info->weights[%0d][%0d] = %0f\n", y, x, scale_info->weights[y][x]);
+        }
+    }
+
+    for (y = 0; y < scale_info->output_size; y++)
+    {
+        for (x = 0; x < scale_info->num_non_zero; x++)
+        {
+            printf("scale_info->indices[%0d][%0d] = %0d\n", y, x, scale_info->indices[y][x]);
+        }
+    }
+
+    for (y = 0; y < scale_info->output_size; y++)
+    {
         free(indices[y]);
         free(weights[y]);
     }
@@ -662,13 +673,22 @@ void release_scale_info(img_scale_info *scale_info)
     free(scale_info->indices);
 }
 
-void init_img_scale_info(img_scale_info *scale_info)
+float getScaleFromSize(int in_size, int out_size)
 {
-    scale_info->kernel_width = 4.0;
-    scale_info->P = scale_info->kernel_width + 2;
-    scale_info->input_size = 5;
-    scale_info->output_size = 10;
-    scale_info->scale = 2;
+    return ((float) out_size) / in_size;
+}
+
+void init_img_scale_info(ppm_image_handler *handler)
+{
+    handler->scale_info.kernel_width = 4.0;
+    handler->scale_info.P = handler->scale_info.kernel_width + 2;
+    handler->scale_info.input_size = handler->imginfo.width;
+    handler->imginfo.new_height = handler->imginfo.height;
+    printf("handler->imginfo.height: %0d\n", handler->imginfo.height);
+    //scale_info->output_size = 10;
+    //scale_info->output_size = 512;
+    handler->scale_info.output_size = handler->imginfo.width * 2;
+    handler->scale_info.scale = getScaleFromSize(handler->scale_info.input_size, handler->scale_info.output_size);
 }
 
 int imresize(ppm_image_handler *handler)
@@ -677,35 +697,95 @@ int imresize(ppm_image_handler *handler)
     int y;
 
     handler->imginfo.new_height = handler->imginfo.height;
-    handler->imginfo.new_width = handler->imginfo.width;
+    printf("new_height: %0d\n", handler->imginfo.new_height);
+    handler->imginfo.new_width = handler->scale_info.output_size;
 
 
-    handler->imginfo.new_buff = (pixel **) malloc(handler->imginfo.height * sizeof(pixel *));
+    handler->imginfo.new_buff = (pixel **) malloc(handler->imginfo.new_height * sizeof(pixel *));
     if (handler->imginfo.new_buff == NULL)
     {
         return -1;
     }
 
-    for (y = 0; y < handler->imginfo.height; y++)
+    for (y = 0; y < handler->imginfo.new_height; y++)
     {
-        handler->imginfo.new_buff[y] = (pixel *) malloc(handler->imginfo.width * sizeof(pixel));
+        handler->imginfo.new_buff[y] = (pixel *) malloc(handler->imginfo.new_width * sizeof(pixel));
         if (handler->imginfo.new_buff[y] == NULL)
         {
             return -1;
         }
     }
   
+    //for (y = 0; y < handler->imginfo.height; y++)
+    //{
+    //    for (x = 0; x < handler->imginfo.width; x++)
+    //    {
+    //        handler->imginfo.new_buff[y][x].r = handler->imginfo.buff[y][x].r;
+    //        handler->imginfo.new_buff[y][x].g = handler->imginfo.buff[y][x].g;
+    //        handler->imginfo.new_buff[y][x].b = handler->imginfo.buff[y][x].b;
+    //    }
+    //}
+    
+    printf("imresize\n");
+
     for (y = 0; y < handler->imginfo.height; y++)
     {
-        for (x = 0; x < handler->imginfo.width; x++)
+        for (x = 0; x < handler->imginfo.new_width; x++)
         {
-            handler->imginfo.new_buff[y][x].r = handler->imginfo.buff[y][x].r;
-            handler->imginfo.new_buff[y][x].g = handler->imginfo.buff[y][x].g;
-            handler->imginfo.new_buff[y][x].b = handler->imginfo.buff[y][x].b;
+            //handler->imginfo.new_buff[y][x].r = handler->imginfo.buff[y][x].r;
+            //handler->imginfo.new_buff[y][x].g = handler->imginfo.buff[y][x].g;
+            //handler->imginfo.new_buff[y][x].b = handler->imginfo.buff[y][x].b;
+
+            float sum_r = 0.0f;
+            float sum_g = 0.0f;
+            float sum_b = 0.0f;
+            int z;
+
+            //printf("x = %0d y = %0d\n", y, x);
+            //printf("handler->imginfo.buff[%0d][%0d].r: %0d\n", x, y, handler->imginfo.buff[y][x].r);
+            //printf("handler->imginfo.buff[%0d][%0d].g: %0d\n", x, y, handler->imginfo.buff[y][x].g);
+            //printf("handler->imginfo.buff[%0d][%0d].b: %0d\n", x, y, handler->imginfo.buff[y][x].b);
+            for (z = 0; z < handler->scale_info.num_non_zero; z++)
+            {
+//                printf("---- x: %0d ---- z: %0d\n", x, z);
+                int index = handler->scale_info.indices[y][z];
+//                printf("indices[%0d][%0d]: %0d weights[%0d][%0d]: %0f\n", x, z, handler->scale_info.indices[x][z], x, z, handler->scale_info.weights[x][z]);
+//                printf("handler->imginfo.buff[y][index].r: %0d\n", handler->imginfo.buff[y][index].r);
+//                printf("handler->imginfo.buff[y][index].g: %0d\n", handler->imginfo.buff[y][index].g);
+//                printf("handler->imginfo.buff[y][index].b: %0d\n", handler->imginfo.buff[y][index].b);
+                sum_r = sum_r + handler->imginfo.buff[y][index].r * handler->scale_info.weights[x][z];
+                sum_g = sum_g + handler->imginfo.buff[y][index].g * handler->scale_info.weights[x][z];
+                sum_b = sum_b + handler->imginfo.buff[y][index].b * handler->scale_info.weights[x][z];
+
+                if (sum_r < 0.0f) sum_r = 0.0f;
+                if (sum_g < 0.0f) sum_g = 0.0f;
+                if (sum_b < 0.0f) sum_b = 0.0f;
+
+                if (sum_r > 256.0f) sum_r = 255.0f;
+                if (sum_g > 256.0f) sum_g = 255.0f;
+                if (sum_b > 256.0f) sum_b = 255.0f;
+
+                handler->imginfo.new_buff[y][index].r = (int) round(sum_r);
+                handler->imginfo.new_buff[y][index].g = (int) round(sum_g);
+                handler->imginfo.new_buff[y][index].b = (int) round(sum_b);
+//                printf("   --- handler->imginfo.new_buff[%0d][%0d].r: %0d\n", y, x, handler->imginfo.new_buff[y][x].r);
+//                printf("   --- handler->imginfo.new_buff[%0d][%0d].g: %0d\n", y, x, handler->imginfo.new_buff[y][x].g);
+//                printf("   --- handler->imginfo.new_buff[%0d][%0d].b: %0d\n", y, x, handler->imginfo.new_buff[y][x].b);
+
+            }
+            //if (x == 3) exit(0);
+
+            //printf("   result - r : %0f\n", handler->imginfo.buff[y][index].r * handler->scale_info.weights[y][x]);
+            //printf("   result - g : %0f\n", handler->imginfo.buff[y][index].g * handler->scale_info.weights[y][x]);
+            //printf("   result - b : %0f\n", handler->imginfo.buff[y][index].b * handler->scale_info.weights[y][x]);
+                
+
+            //printf("   --- sum_r: %0f\n", sum_r);
+            //printf("   --- sum_g: %0f\n", sum_g);
+            //printf("   --- sum_b: %0f\n", sum_b);
         }
     }
     
-    printf("imresize\n");
     return 0;
 }
 
@@ -762,7 +842,12 @@ int doProcessPPM(ppm_image_handler *handler)
 //    }
     if (handler->arg_flag.resize_enable)
     {
+        init_img_scale_info(handler);
+
+        calc_contributions(&(handler->scale_info));
+
         imresize(handler);
+        release_scale_info(&(handler->scale_info));
     }
         
     // write the processed image to file
