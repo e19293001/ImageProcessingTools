@@ -20,7 +20,8 @@
 // *              7. !Change! the rotation direction.
 // * 12/2017 - initial version
 
-#define TEST_RESIZE
+//#define TEST_RESIZE
+#define TEST_ROTATE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,7 +29,7 @@
 #include <math.h>
 #include <string.h>
 
-#define IMAGE_BUFLEN 10
+#define DATA_BUFLEN 10
 #define MAX_HEADER_CHARS 128
 
 #define PPM_MAGIC_NUM 0
@@ -46,6 +47,10 @@ typedef struct img_scale_info {
     int P;
     int num_non_zero;
 } img_scale_info;
+
+typedef struct img_rotate_info {
+    float angle;
+} img_rotate_info;
 
 typedef struct pixel {
     unsigned char r;
@@ -66,12 +71,13 @@ typedef struct img_info {
 
 typedef struct args_flag {
     char resize_enable;
+    char rotate_enable;
 } args_flag;
 
 // this structure is used for parsing the header file
 typedef struct token{
     int kind;
-    char image[IMAGE_BUFLEN];
+    char data[DATA_BUFLEN];
     char current_char;
 } token;
 
@@ -86,6 +92,7 @@ typedef struct ppm_image_handler {
     unsigned int filesize;
     unsigned int index_buffer;
     token tkn;
+    img_rotate_info rotate_info;
 } ppm_image_handler;
 
 void calc_contributions(img_scale_info *scale_info);
@@ -105,23 +112,27 @@ void releaseBuffer(ppm_image_handler *handler);
 #ifdef TEST_RESIZE
 int main(int argc, char **argv)
 {
-    int x, y;
     ppm_image_handler handler;
-
-    //weights = (float **) malloc(output_size * sizeof(float*));
-    //indices = (int **) malloc(output_size * sizeof(int*));
 
     handler.filename = argv[1];
     handler.arg_flag.resize_enable = 1;
 
+    if (doProcessPPM(&handler) != 0)
+    {
+        return -1;
+    }
 
-    //for (y = 0; y < scale_info.output_size; y++)
-    //{
-    //    for (x = 0; x < scale_info.num_non_zero; x++)
-    //    {
-    //        printf("weights[%0d][%0d] : %0f\n", y, x, scale_info.weights[y][x]);
-    //    }
-    //}
+    return 0;
+}
+#endif
+#ifdef TEST_ROTATE
+int main(int argc, char **argv)
+{
+    ppm_image_handler handler;
+
+    handler.filename = argv[1];
+    handler.arg_flag.rotate_enable = 1;
+    handler.arg_flag.resize_enable = 0;
 
     if (doProcessPPM(&handler) != 0)
     {
@@ -201,14 +212,15 @@ int putImageToFile(ppm_image_handler *handler)
     FILE *fofp;
     unsigned int x;
     unsigned int y;
-    unsigned int img_sz;
     int error = 0;
+    //unsigned int img_sz;
+
 
     memset(fileout, '\0', MAX_HEADER_CHARS);
     strncpy(fileout, handler->filename, fileout_size);
     strcat(fileout, ".out");
 
-    img_sz = handler->imginfo.new_width * handler->imginfo.new_height;
+    //img_sz = handler->imginfo.new_width * handler->imginfo.new_height;
 
     if ((fofp = fopen(fileout, "wb")) == NULL)
     {
@@ -255,8 +267,8 @@ int putImageToFile(ppm_image_handler *handler)
         return -1;
     }
 
-    printf("new_height: %0d\n", handler->imginfo.new_height);
-    printf("new_width: %0d\n", handler->imginfo.new_width);
+    //printf("new_height: %0d\n", handler->imginfo.new_height);
+    //printf("new_width: %0d\n", handler->imginfo.new_width);
     
     for (y = 0; y < handler->imginfo.new_height; y++)
     {
@@ -289,7 +301,9 @@ int putImageToFile(ppm_image_handler *handler)
     }
 
     fclose(fofp);
-    free(handler->imginfo.new_buff);
+    if (handler->imginfo.new_height != 0 || handler->imginfo.new_height != 0)
+        free(handler->imginfo.new_buff);
+
     return 0;
 }
 
@@ -329,11 +343,9 @@ void getNextChar(ppm_image_handler *handler)
     // ignore comments
     if (handler->tkn.current_char == '#')
     {
-        char next_char;
         do
         {
             handler->tkn.current_char = handler->file_buffer[handler->index_buffer++];
-            next_char = handler->file_buffer[handler->index_buffer];
         } while (handler->tkn.current_char != '\n');
         handler->tkn.current_char = '\n';
     }
@@ -354,10 +366,10 @@ int getNextToken(ppm_image_handler *handler, token *current_token)
     if (isdigit(handler->tkn.current_char))
     {
         int index = 0;
-        memset(&(handler->tkn.image), '\0', IMAGE_BUFLEN);
+        memset(&(handler->tkn.data), '\0', DATA_BUFLEN);
         do
         {
-            handler->tkn.image[index++] = handler->tkn.current_char;
+            handler->tkn.data[index++] = handler->tkn.current_char;
             getNextChar(handler);
         } while (isdigit(handler->tkn.current_char));
         handler->tkn.kind = PPM_UNSIGNED;
@@ -366,12 +378,12 @@ int getNextToken(ppm_image_handler *handler, token *current_token)
     { // if token is a word
         int index = 0;
         do {
-            handler->tkn.image[index++] = handler->tkn.current_char;
+            handler->tkn.data[index++] = handler->tkn.current_char;
             getNextChar(handler);
         } while (isalnum(handler->tkn.current_char));
-        handler->tkn.image[index] = '\0';
+        handler->tkn.data[index] = '\0';
 
-        if ((strncmp(handler->tkn.image, "P6", IMAGE_BUFLEN)) == 0)
+        if ((strncmp(handler->tkn.data, "P6", DATA_BUFLEN)) == 0)
         {
             handler->tkn.kind = PPM_MAGIC_NUM;
         }
@@ -417,7 +429,7 @@ int getImageInfo(ppm_image_handler *handler)
         printf("error. invalid file format. unable to parse width from input file.\n");
         return -1;
     }
-    handler->imginfo.width = atoi(current_token.image);
+    handler->imginfo.width = atoi(current_token.data);
 
     // retrieve the height
     if ((error = getNextToken(handler, &current_token)) != 0)
@@ -430,7 +442,7 @@ int getImageInfo(ppm_image_handler *handler)
         printf("error. invalid file format. unable to parse height from input file.\n");
         return -1;
     }
-    handler->imginfo.height = atoi(current_token.image);
+    handler->imginfo.height = atoi(current_token.data);
 
     // retrieve the maximum color
     if ((error = getNextToken(handler, &current_token)) != 0)
@@ -443,7 +455,7 @@ int getImageInfo(ppm_image_handler *handler)
         printf("error. invalid file format. unable to parse maximum color from input file.\n");
         return -1;
     }
-    handler->imginfo.max_color = atoi(current_token.image);
+    handler->imginfo.max_color = atoi(current_token.data);
   
     handler->imginfo.buff = (pixel **) malloc(handler->imginfo.height * sizeof(pixel *));
     if (handler->imginfo.buff == NULL)
@@ -469,6 +481,8 @@ int getImageInfo(ppm_image_handler *handler)
             }            
         }
     }
+    handler->imginfo.new_width = 0;
+    handler->imginfo.new_height = 0;
 
     if (handler->filesize != handler->index_buffer)
     {
@@ -548,7 +562,7 @@ void calc_contributions(img_scale_info *scale_info)
         }
     }
 
-    aux = (unsigned int *) malloc(aux_size * (sizeof(unsigned int)));
+    aux = (int *) malloc(aux_size * (sizeof(int)));
     memset(aux, 0, aux_size);
 
     y = 0;
@@ -674,19 +688,92 @@ float getScaleFromSize(int in_size, int out_size)
     return ((float) out_size) / in_size;
 }
 
+void init_img_rotate_info(ppm_image_handler *handler)
+{
+    handler->rotate_info.angle = 30;
+}
+
 void init_img_scale_info(ppm_image_handler *handler)
 {
     handler->scale_info.kernel_width = 4.0;
     handler->scale_info.P = handler->scale_info.kernel_width + 2;
     handler->scale_info.input_size = handler->imginfo.width;
     handler->imginfo.new_height = handler->imginfo.height;
-    printf("handler->imginfo.height: %0d\n", handler->imginfo.height);
+    //printf("handler->imginfo.height: %0d\n", handler->imginfo.height);
     //scale_info->output_size = 10;
     //scale_info->output_size = 512;
-    handler->scale_info.output_size = handler->imginfo.width * 2;
+    handler->scale_info.output_size = handler->imginfo.width / 2; // need to set from command line argument
     handler->scale_info.scale = getScaleFromSize(handler->scale_info.input_size, handler->scale_info.output_size);
 }
 
+float to_degrees(float radians) {
+    return radians * (180.0 / M_PI);
+}
+
+int rotate(ppm_image_handler *handler)
+{
+    int x;
+    int y;
+    int x_center;
+    int y_center;
+
+    handler->imginfo.new_height = handler->imginfo.height;
+    handler->imginfo.new_width = handler->imginfo.width;
+    printf("new_height: %0d\n", handler->imginfo.new_height);
+    printf("new_width: %0d\n", handler->imginfo.new_width);
+
+    x_center = handler->imginfo.new_width / 2;
+    y_center = handler->imginfo.new_height / 2;
+
+    handler->imginfo.new_buff = (pixel **) malloc(handler->imginfo.new_height * sizeof(pixel *));
+    if (handler->imginfo.new_buff == NULL)
+    {
+        return -1;
+    }
+
+    for (y = 0; y < handler->imginfo.new_height; y++)
+    {
+        handler->imginfo.new_buff[y] = (pixel *) malloc(handler->imginfo.new_width * sizeof(pixel));
+        if (handler->imginfo.new_buff[y] == NULL)
+        {
+            return -1;
+        }
+    }
+
+    for (y = 0; y < handler->imginfo.new_height; y++)
+    {
+        for (x = 0; x < handler->imginfo.new_width; x++)
+        {
+            int x0 = x - x_center;
+            int y0 = y - y_center;
+            float angle = to_degrees(handler->rotate_info.angle);
+            float newX = (cos(angle) * x0) - (sin(angle) * y0);
+            float newY = (sin(angle) * (-x0)) + (cos(angle) * y0);
+            int nX;
+            int nY;
+            newX = newX + x_center;
+            newY = newY + y_center;
+            if (newX > handler->imginfo.new_width - 1) newX = handler->imginfo.new_width - 1;
+            if (newY > handler->imginfo.new_height -1) newY = handler->imginfo.new_height - 1;
+            if (newX < 0) newX = 0;
+            if (newY < 0) newY = 0;
+            nX = (int)newX;
+            nY = (int)newY;
+            printf("new_height: %0d\n", handler->imginfo.new_height);
+            printf("new_width: %0d\n", handler->imginfo.new_width);
+            printf("y: %0d\n", y);
+            printf("x: %0d\n", x);
+            printf("nX: %0d\n", nX);
+            printf("nY: %0d\n", nY);
+            //handler->imginfo.new_buff[nY][nX] = handler->imginfo.buff[y][x];
+            handler->imginfo.new_buff[y][x] = handler->imginfo.buff[nY][nX];
+            //handler->imginfo.new_buff[y][x] = handler->imginfo.buff[y][x];
+        }
+    }
+    
+    return 0;
+}
+        
 int imresize(ppm_image_handler *handler)
 {
     int x;
@@ -809,6 +896,15 @@ int doProcessPPM(ppm_image_handler *handler)
         imresize(handler);
         release_scale_info(&(handler->scale_info));
     }
+
+    if (handler->arg_flag.rotate_enable)
+    {
+        init_img_rotate_info(handler);
+        rotate(handler);
+    }
+
+        
+            
         
     // write the processed image to file
     if (putImageToFile(handler) != 0)
