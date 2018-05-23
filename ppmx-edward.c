@@ -710,6 +710,10 @@ float to_radians(float degrees) {
     return (degrees / 180.0) * M_PI;
 }
 
+float to_degrees(float radians) {
+    return (radians * 180.0) / M_PI;
+}
+
 int rotate(ppm_image_handler *handler)
 {
     int x;
@@ -718,10 +722,47 @@ int rotate(ppm_image_handler *handler)
     int y_center;
     float angle = to_radians(handler->rotate_info.angle);
 
-    handler->imginfo.new_height = handler->imginfo.height * 2;
-    handler->imginfo.new_width = handler->imginfo.width * 2;
+//    handler->imginfo.new_height = handler->imginfo.height * 2;
+//    handler->imginfo.new_width = handler->imginfo.width * 2;
+    float theta1 = angle;
+    float theta2;
+
+    int a;
+    int b;
+    int c;
+    int d;
+    int e;
+    int f;
+
+    d = handler->imginfo.height;
+    c = handler->imginfo.width;
+
+    b = c * sin(theta1);
+    a = c * cos(theta1);
+    theta2 = (asin(((float)a)/c));
+    f = d * sin(theta1);
+    e = d * cos(theta1);
+
+    handler->imginfo.new_height = b + e;
+    handler->imginfo.new_width = a + f;
+    
+    printf("theta1: %0f\n", theta1);
+    printf("d: %0d\n", d);
+    printf("c: %0d\n", c);
+    printf("b: %0d\n", b);
+    printf("a: %0d\n", a);
+    printf("f: %0d\n", f);
+    printf("e: %0d\n", e);
+    printf("theta2: %0f\n", theta2);
+    printf("to_radians(90.0): %0f\n", to_radians(90.0));
     printf("new_height: %0d\n", handler->imginfo.new_height);
     printf("new_width: %0d\n", handler->imginfo.new_width);
+
+
+    //handler->imginfo.new_height = handler->imginfo.height * 2;
+    //handler->imginfo.new_width = handler->imginfo.width * 2;
+
+
 
     x_center = handler->imginfo.new_width / 2;
     y_center = handler->imginfo.new_height / 2;
