@@ -690,7 +690,7 @@ float getScaleFromSize(int in_size, int out_size)
 
 void init_img_rotate_info(ppm_image_handler *handler)
 {
-    handler->rotate_info.angle = 40;
+    handler->rotate_info.angle = 15;
 }
 
 void init_img_scale_info(ppm_image_handler *handler)
@@ -748,14 +748,14 @@ int rotate(ppm_image_handler *handler)
     handler->imginfo.new_height = b + e;
     handler->imginfo.new_width = a + f;
     
-    printf("theta1: %0f\n", theta1);
+    printf("theta1: %0f\n", to_degrees(theta1));
     printf("d: %0d\n", d);
     printf("c: %0d\n", c);
     printf("b: %0d\n", b);
     printf("a: %0d\n", a);
     printf("f: %0d\n", f);
     printf("e: %0d\n", e);
-    printf("theta2: %0f\n", theta2);
+    printf("theta2: %0f\n", to_degrees(theta2));
     printf("to_radians(90.0): %0f\n", to_radians(90.0));
     printf("new_height: %0d\n", handler->imginfo.new_height);
     printf("new_width: %0d\n", handler->imginfo.new_width);
@@ -766,13 +766,13 @@ int rotate(ppm_image_handler *handler)
 
 
 
-    x_center_in = handler->imginfo.width / 2;
-    y_center_in = handler->imginfo.height / 2;
-    x_center_out = handler->imginfo.new_width / 2;
-    y_center_out = handler->imginfo.new_height / 2;
+    x_center_in = floor(handler->imginfo.width / 2);
+    y_center_in = floor(handler->imginfo.height / 2);
+    x_center_out = floor(handler->imginfo.new_width / 2);
+    y_center_out = floor(handler->imginfo.new_height / 2);
 
-    int x_extend = (handler->imginfo.new_width / 2) - (handler->imginfo.width / 2);
-    int y_extend = (handler->imginfo.new_height / 2) - (handler->imginfo.height / 2);
+    int x_extend = floor(handler->imginfo.new_width / 2) - floor(handler->imginfo.width / 2);
+    int y_extend = floor(handler->imginfo.new_height / 2) - floor(handler->imginfo.height / 2);
 
 //    x_center = handler->imginfo.new_width / 2;
 //    y_center = handler->imginfo.new_height / 2;
@@ -793,75 +793,72 @@ int rotate(ppm_image_handler *handler)
         }
     }
 
-    for (y = 0; y < handler->imginfo.new_height; y++)
+    for (y = 0; y < handler->imginfo.new_height + y_extend; y++)
     {
-        for (x = 0; x < handler->imginfo.new_width; x++)
+        for (x = 0; x < handler->imginfo.new_width + x_extend; x++)
         {
-            int x1 = x;
-            int y1 = y;
+            float newX;
+            float newY;
+			int xx = x - x_extend;
+			int yy = y - y_extend;
+
+            int x1 = xx;
+            int y1 = yy;
+
             int x0 = x1 - x_center_in;
             int y0 = y1 - y_center_in;
+
             //float angle = handler->rotate_info.angle;
-            float newX = ((cos(angle) * (x0)) + (sin(angle) * (y0)));
-            float newY = (-(sin(angle) * (x0)) + (cos(angle) * (y0)));
+            newX = ((cos(angle) * (x0)) + (sin(angle) * (y0)));
+            newY = (-(sin(angle) * (x0)) + (cos(angle) * (y0)));
             int nX;
             int nY;
-            nX = (int)newX + x_center_in;
-            nY = (int)newY + y_center_in;
-            //if (x == handler->imginfo.new_width-1 && y == handler->imginfo.new_height-1)
-            if (x == 0 && y == 0)
-            {
-                printf("new_height: %0d ", handler->imginfo.new_height);
-                printf("new_width: %0d ", handler->imginfo.new_width);
-                printf("y0: %0d x0: %0d ", x0, y0);
-                printf(" x_center: %0d ", x_center_in);
-                printf("y_center: %0d ", y_center_in);
-                printf(" from [%0d][%0d] to [%0d][%0d]\n", y, x, nY, nX);
-                printf(" nX: %0d\n", nX);
-                printf(" nY: %0d\n", nY);
-                printf(" -x_extend: %0d\n", -x_extend);
-                printf(" -y_extend: %0d\n", -y_extend);
-                printf("------------------------------\n");
 
-                if ((nX < (handler->imginfo.width - 1) && nY < (handler->imginfo.height - 1)) && (nX >= -x_extend && nY >= -y_extend))
-                {
-                    printf("sulod\n");
-                }
-                else
-                {
-                    printf("gwa\n");
-                }
-                if (nY >= -y_extend)
-                {
-                    printf("nY >= -y_extend\n");
-                }
-                if (nX >= -x_extend)
-                {
-                    printf("nX >= -x_extend\n");
-                }
-                if (nX < (handler->imginfo.width - 1))
-                {
-                    printf("nX < (handler->imginfo.width - 1");
-                }
-                        
-            }
-            if (((nX < (handler->imginfo.width - 1) && nY < (handler->imginfo.height - 1) && nX >= 0 && nY >= 0)) || nY == -33)
+            nX = floor(newX) + x_center_in - x_extend;
+            nY = floor(newY) + y_center_in - y_extend;
+
+            if (nX == 0 && nY == 0)
             {
-                //printf("new_height: %0d ", handler->imginfo.new_height);
-                //printf("new_width: %0d ", handler->imginfo.new_width);
-                //printf(" x_center: %0d ", x_center);
-                //printf("y_center: %0d ", y_center);
-                //printf(" from [%0d][%0d] to [%0d][%0d]\n", y, x, nY, nX);
-                handler->imginfo.new_buff[y+y_extend][x+x_extend] = handler->imginfo.buff[nY][nX];
-                //handler->imginfo.new_buff[y][x] = handler->imginfo.buff[nY][nX];
-                //handler->imginfo.new_buff[y][x] = handler->imginfo.buff[y][x];
+                if ((nX < (handler->imginfo.width)) && (nY < (handler->imginfo.height)) && (nY >= 0) && (nX >= 0))
+                {
+					printf(" ---- sulod \n");
+				}
+
+				printf("x_center_in: %0d y_center_in: %0d\n", x_center_in, y_center_in);
+				printf("x_extend: %0d y_extend: %0d\n", x_extend, y_extend);
+				printf("x: %0d y: %0d\n", x, y);
+				printf("x0: %0d y0: %0d\n", x0, y0);
+				printf("newX: %0f newY: %0f\n", floor(newX), floor(newY));
+				printf("nX: %0d nY: %0d\n", nX, nY);
+				printf("x: %0d y: %0d in[%0d][%0d] -> out[%0d][%0d]\n", x1, y1, nY, nX, y-y_extend, x-x_extend);
+			}
+
+            //if (x == x_extend && y == y_extend)
+            //{
+                //if ((nX < (handler->imginfo.width)) && (nY < (handler->imginfo.height)) && (nY >= 0) && (nX >= 0))
+
+			if ((nX < (handler->imginfo.width)) && (nY < (handler->imginfo.height)) && (nY >= 0) && (nX >= 0) && (xx < handler->imginfo.new_width) && (yy < handler->imginfo.new_height))
+            {
+//				printf("old_height: %0d old_width: %0d\n", handler->imginfo.height, handler->imginfo.width);
+//				printf("new_height: %0d height_width: %0d\n", handler->imginfo.new_height, handler->imginfo.new_width);
+//				printf("xx: %0d yy: %0d in[%0d][%0d] -> out[%0d][%0d]\n", xx, yy, nY, nX, yy, xx);
+//				printf(" >> sulod\n");
+				handler->imginfo.new_buff[yy][xx] = handler->imginfo.buff[nY][nX];
             }
+//			else
+//			{
+//				printf(" >> gwa\n");
+//			}
+
+            //}
+            // reverse mapping
         }
     }
+	printf("done\n");
 
-    handler->imginfo.new_buff[0][0].r = 0xFF;
-    handler->imginfo.new_buff[0][0].g = 0x00;
-    handler->imginfo.new_buff[0][0].b = 0x00;
+    //handler->imginfo.new_buff[0][60].r = 0xFF;
+    //handler->imginfo.new_buff[0][60].g = 0x00;
+    //handler->imginfo.new_buff[0][60].b = 0x00;
     
     return 0;
 }
