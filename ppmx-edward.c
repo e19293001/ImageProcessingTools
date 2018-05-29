@@ -690,7 +690,7 @@ float getScaleFromSize(int in_size, int out_size)
 
 void init_img_rotate_info(ppm_image_handler *handler)
 {
-    handler->rotate_info.angle = 15;
+    handler->rotate_info.angle = 80;
 }
 
 void init_img_scale_info(ppm_image_handler *handler)
@@ -774,9 +774,6 @@ int rotate(ppm_image_handler *handler)
     int x_extend = floor(handler->imginfo.new_width / 2) - floor(handler->imginfo.width / 2);
     int y_extend = floor(handler->imginfo.new_height / 2) - floor(handler->imginfo.height / 2);
 
-//    x_center = handler->imginfo.new_width / 2;
-//    y_center = handler->imginfo.new_height / 2;
-
     handler->imginfo.new_buff = (pixel **) malloc(handler->imginfo.new_height * sizeof(pixel *));
     if (handler->imginfo.new_buff == NULL)
     {
@@ -805,8 +802,8 @@ int rotate(ppm_image_handler *handler)
             int x1 = xx;
             int y1 = yy;
 
-            int x0 = x1 - x_center_in;
-            int y0 = y1 - y_center_in;
+            int x0 = x1 - x_center_out;
+            int y0 = y1 - y_center_out;
 
             //float angle = handler->rotate_info.angle;
             newX = ((cos(angle) * (x0)) + (sin(angle) * (y0)));
@@ -814,44 +811,13 @@ int rotate(ppm_image_handler *handler)
             int nX;
             int nY;
 
-            nX = floor(newX) + x_center_in - x_extend;
-            nY = floor(newY) + y_center_in - y_extend;
-
-            if (nX == 0 && nY == 0)
-            {
-                if ((nX < (handler->imginfo.width)) && (nY < (handler->imginfo.height)) && (nY >= 0) && (nX >= 0))
-                {
-					printf(" ---- sulod \n");
-				}
-
-				printf("x_center_in: %0d y_center_in: %0d\n", x_center_in, y_center_in);
-				printf("x_extend: %0d y_extend: %0d\n", x_extend, y_extend);
-				printf("x: %0d y: %0d\n", x, y);
-				printf("x0: %0d y0: %0d\n", x0, y0);
-				printf("newX: %0f newY: %0f\n", floor(newX), floor(newY));
-				printf("nX: %0d nY: %0d\n", nX, nY);
-				printf("x: %0d y: %0d in[%0d][%0d] -> out[%0d][%0d]\n", x1, y1, nY, nX, y-y_extend, x-x_extend);
-			}
-
-            //if (x == x_extend && y == y_extend)
-            //{
-                //if ((nX < (handler->imginfo.width)) && (nY < (handler->imginfo.height)) && (nY >= 0) && (nX >= 0))
+            nX = floor(newX) + x_center_out - x_extend;
+            nY = floor(newY) + y_center_out - y_extend;
 
 			if ((nX < (handler->imginfo.width)) && (nY < (handler->imginfo.height)) && (nY >= 0) && (nX >= 0) && (xx < handler->imginfo.new_width) && (yy < handler->imginfo.new_height))
             {
-//				printf("old_height: %0d old_width: %0d\n", handler->imginfo.height, handler->imginfo.width);
-//				printf("new_height: %0d height_width: %0d\n", handler->imginfo.new_height, handler->imginfo.new_width);
-//				printf("xx: %0d yy: %0d in[%0d][%0d] -> out[%0d][%0d]\n", xx, yy, nY, nX, yy, xx);
-//				printf(" >> sulod\n");
 				handler->imginfo.new_buff[yy][xx] = handler->imginfo.buff[nY][nX];
             }
-//			else
-//			{
-//				printf(" >> gwa\n");
-//			}
-
-            //}
-            // reverse mapping
         }
     }
 	printf("done\n");
@@ -991,9 +957,6 @@ int doProcessPPM(ppm_image_handler *handler)
         init_img_rotate_info(handler);
         rotate(handler);
     }
-
-        
-            
         
     // write the processed image to file
     if (putImageToFile(handler) != 0)
