@@ -690,7 +690,7 @@ float getScaleFromSize(int in_size, int out_size)
 
 void init_img_rotate_info(ppm_image_handler *handler)
 {
-    handler->rotate_info.angle = 105;
+    handler->rotate_info.angle = 10.5;
 }
 
 void init_img_scale_info(ppm_image_handler *handler)
@@ -727,7 +727,7 @@ int rotate(ppm_image_handler *handler)
 
 //    handler->imginfo.new_height = handler->imginfo.height * 2;
 //    handler->imginfo.new_width = handler->imginfo.width * 2;
-    double theta1 = angle;
+    double theta1;
     double theta2;
 
     double a;
@@ -740,18 +740,36 @@ int rotate(ppm_image_handler *handler)
 	int x_offset;
 	int y_offset;
 
-	d = handler->imginfo.height;
-	c = handler->imginfo.width;
+	if (handler->rotate_info.angle <= 90) {
+		theta1 = to_radians(handler->rotate_info.angle);
+		d = handler->imginfo.height;
+		c = handler->imginfo.width;
 
-	b = c * sin(theta1);
-	a = c * cos(theta1);
-	theta2 = asin(((double)a)/c);
-	printf("((double)a)/c: %0f\n", ((double)a)/c);
-	f = d * sin(theta1);
-	e = d * cos(theta1);
+		b = c * sin(theta1);
+		a = c * cos(theta1);
+		theta2 = asin(((double)a)/c);
+		printf("((double)a)/c: %0f\n", ((double)a)/c);
+		f = d * sin(theta1);
+		e = d * cos(theta1);
+		handler->imginfo.new_width = floor(a + f);
+		handler->imginfo.new_height = floor(b + e);
+	}
+	else
+	{
+		theta1 = to_radians(handler->rotate_info.angle - 90);
+		d = handler->imginfo.height;
+		c = handler->imginfo.width;
 
-	handler->imginfo.new_width = floor(a + f);
-	handler->imginfo.new_height = floor(b + e);
+		b = c * sin(theta1);
+		a = c * cos(theta1);
+		theta2 = asin(((double)a)/c);
+		printf("((double)a)/c: %0f\n", ((double)a)/c);
+		f = d * sin(theta1);
+		e = d * cos(theta1);
+		handler->imginfo.new_height = floor(a + f);
+		handler->imginfo.new_width = floor(b + e);
+	}
+
     
 	x_center_in = floor(handler->imginfo.width / 2);
 	y_center_in = floor(handler->imginfo.height / 2);
@@ -761,16 +779,6 @@ int rotate(ppm_image_handler *handler)
 	x_offset = floor(handler->imginfo.new_width / 2) - floor(handler->imginfo.width / 2);
 	y_offset = floor(handler->imginfo.new_height / 2) - floor(handler->imginfo.height / 2);
 
-	//if (x_offset < 0)
-	//{
-	//	x_offset = 0;
-	//}
-	//
-	//if (y_offset < 0)
-	//{
-	//	y_offset = 0;
-	//}
-
     printf("theta1: %0f\n", to_degrees(theta1));
     printf("d: %0f\n", d);
     printf("c: %0f\n", c);
@@ -779,7 +787,7 @@ int rotate(ppm_image_handler *handler)
     printf("f: %0f\n", f);
     printf("e: %0f\n", e);
     printf("theta2: %0f\n", to_degrees(theta2));
-    printf("to_radians(90.0): %0f\n", to_radians(90.0));
+    printf("theta1: %0f\n", to_radians(theta1));
     printf("old_height: %0d\n", handler->imginfo.height);
     printf("old_width: %0d\n", handler->imginfo.width);
     printf("new_height: %0d\n", handler->imginfo.new_height);
@@ -804,8 +812,6 @@ int rotate(ppm_image_handler *handler)
             return -1;
         }
     }
-
-	//x_offset = floor(handler->imginfo.height / 2) - floor(handler->imginfo.new_height / 2);
 
 	for (y = 0; y < handler->imginfo.new_height; y++)
     {
@@ -848,40 +854,6 @@ int rotate(ppm_image_handler *handler)
         }
     }
 
-    //for (y = 0; y < handler->imginfo.new_height + y_offset; y++)
-    //{
-    //    for (x = 0; x < handler->imginfo.new_width + x_offset; x++)
-    //    {
-    //        float newX;
-    //        float newY;
-	//		int xx;
-	//		int yy;
-	//
-    //        int x0;
-    //        int y0;
-	//
-    //        int nX;
-    //        int nY;
-	//
-	//		xx = x - x_offset;
-	//		yy = y - y_offset;
-	//		x0 = xx - x_center_out;			
-	//
-	//		y0 = yy - y_center_out;
-	//
-    //        newX = ((cos(angle) * (x0)) + (sin(angle) * (y0)));
-    //        newY = (-(sin(angle) * (x0)) + (cos(angle) * (y0)));
-	//
-    //        nX = floor(newX) + x_center_out - x_offset;
-    //        nY = floor(newY) + y_center_out - y_offset;
-	//
-	//		if ((nX < handler->imginfo.width) && (nY < handler->imginfo.height) && (nY >= 0) && (nX >= 0) && (xx < handler->imginfo.new_width) && (yy < handler->imginfo.new_height))
-    //        {
-	//			handler->imginfo.new_buff[yy][xx] = handler->imginfo.buff[nY][nX];
-    //        }
-    //    }
-    //}
-	
 	printf("done\n");
 
     //handler->imginfo.new_buff[0][60].r = 0xFF;
