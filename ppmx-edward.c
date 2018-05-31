@@ -715,20 +715,11 @@ float to_degrees(float radians) {
     return (radians * 180.0) / M_PI;
 }
 
-int rotate(ppm_image_handler *handler)
+void calc_rot_size(double angle,
+				   unsigned int old_width, unsigned int old_height,
+				   unsigned int *new_width, unsigned int *new_height)
 {
-    int x;
-    int y;
-    int x_center_in;
-    int y_center_in;
-    int x_center_out;
-    int y_center_out;
-    double angle = to_radians(handler->rotate_info.angle);
-
-//    handler->imginfo.new_height = handler->imginfo.height * 2;
-//    handler->imginfo.new_width = handler->imginfo.width * 2;
     double theta1;
-    double theta2;
 
     double a;
     double b;
@@ -736,66 +727,39 @@ int rotate(ppm_image_handler *handler)
     double d;
     double e;
     double f;
+	theta1 = to_radians(angle);
+	d = old_height;
+	c = old_width;
+
+	b = c * sin(theta1);
+	a = c * cos(theta1);
+	f = d * sin(theta1);
+	e = d * cos(theta1);
+	*new_width = floor(a + f);
+	*new_height = floor(b + e);
+}	
+
+int rotate(ppm_image_handler *handler)
+{
+    int x;
+    int y;
+    int x_center_in;
+    int y_center_in;
+
+    double angle = to_radians(handler->rotate_info.angle);
 
 	int x_offset;
 	int y_offset;
 
-	if (handler->rotate_info.angle <= 90) {
-		theta1 = to_radians(handler->rotate_info.angle);
-		d = handler->imginfo.height;
-		c = handler->imginfo.width;
-
-		b = c * sin(theta1);
-		a = c * cos(theta1);
-		theta2 = asin(((double)a)/c);
-		printf("((double)a)/c: %0f\n", ((double)a)/c);
-		f = d * sin(theta1);
-		e = d * cos(theta1);
-		handler->imginfo.new_width = floor(a + f);
-		handler->imginfo.new_height = floor(b + e);
-	}
-	else
-	{
-		theta1 = to_radians(handler->rotate_info.angle - 90);
-		d = handler->imginfo.height;
-		c = handler->imginfo.width;
-
-		b = c * sin(theta1);
-		a = c * cos(theta1);
-		theta2 = asin(((double)a)/c);
-		printf("((double)a)/c: %0f\n", ((double)a)/c);
-		f = d * sin(theta1);
-		e = d * cos(theta1);
-		handler->imginfo.new_height = floor(a + f);
-		handler->imginfo.new_width = floor(b + e);
-	}
-
-    
+	calc_rot_size(handler->rotate_info.angle <= 90 ? handler->rotate_info.angle : handler->rotate_info.angle-90,
+				  handler->imginfo.width, handler->imginfo.height,
+				  &handler->imginfo.new_width, &handler->imginfo.new_height);
+	
 	x_center_in = floor(handler->imginfo.width / 2);
 	y_center_in = floor(handler->imginfo.height / 2);
-	x_center_out = floor(handler->imginfo.new_width / 2);
-	y_center_out = floor(handler->imginfo.new_height / 2);
 
 	x_offset = floor(handler->imginfo.new_width / 2) - floor(handler->imginfo.width / 2);
 	y_offset = floor(handler->imginfo.new_height / 2) - floor(handler->imginfo.height / 2);
-
-    printf("theta1: %0f\n", to_degrees(theta1));
-    printf("d: %0f\n", d);
-    printf("c: %0f\n", c);
-    printf("b: %0f\n", b);
-    printf("a: %0f\n", a);
-    printf("f: %0f\n", f);
-    printf("e: %0f\n", e);
-    printf("theta2: %0f\n", to_degrees(theta2));
-    printf("theta1: %0f\n", to_radians(theta1));
-    printf("old_height: %0d\n", handler->imginfo.height);
-    printf("old_width: %0d\n", handler->imginfo.width);
-    printf("new_height: %0d\n", handler->imginfo.new_height);
-    printf("new_width: %0d\n", handler->imginfo.new_width);
-	printf("x_center_out: %0d\n", x_center_out);
-	printf("y_center_out: %0d\n", y_center_out);
-	printf("x_offset: %0d\n", x_offset);
-	printf("y_offset: %0d\n", y_offset);
 
     handler->imginfo.new_buff = (pixel **) malloc(handler->imginfo.new_height * sizeof(pixel *));
     if (handler->imginfo.new_buff == NULL)
@@ -838,14 +802,6 @@ int rotate(ppm_image_handler *handler)
 
             nX = floor(newX + x_center_in);
             nY = floor(newY + y_center_in);
-
-			//printf("x_offset: %0d y_offset: %0d\n", x_offset, y_offset);
-			//printf("([x: %0d], [y: %0d]) <-- ([nX: %0d], [nY: %0d])\n", xx, yy, nX, nY);
-			//printf("newX: %.17f newY: %.17f\n", newX, newY);
-			//printf("angle: %.17f\n", angle);
-			//printf("sin(angle): %.17f\n", sin(angle));
-			//printf("cos(angle): %ef\n", cos(angle));
-			//printf("cos(angle): %ef\n", floor(cos(angle)));
 
 			if ((nX < handler->imginfo.width) && (nY < handler->imginfo.height) && (nY >= 0) && (nX >= 0))
             {
