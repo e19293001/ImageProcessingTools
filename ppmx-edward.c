@@ -690,7 +690,7 @@ float getScaleFromSize(int in_size, int out_size)
 
 void init_img_rotate_info(ppm_image_handler *handler)
 {
-    handler->rotate_info.angle = 90;
+    handler->rotate_info.angle = 359;
 }
 
 void init_img_scale_info(ppm_image_handler *handler)
@@ -742,17 +742,42 @@ int rotate(ppm_image_handler *handler)
     int x_center_in;
     int y_center_in;
 
-    double angle = to_radians(handler->rotate_info.angle);
+	double angle;
 
 	int x_offset;
 	int y_offset;
 
+	angle = handler->rotate_info.angle;
+
+	if (angle > 270)
+	{
+		angle = 360 - angle;
+	}
+	else if (angle > 180)
+	{
+		angle = angle - 180;
+	}
+	else if (angle > 90)
+	{
+		// this will cause to assign the old width to new height and
+		// old height to new width
+		angle = angle - 90;
+	}
+
 	printf("angle degrees: %.17f radians: %.17f\n", handler->rotate_info.angle, to_radians(handler->rotate_info.angle));
-	printf("cos(angle): %.17f\n", cos(angle));
-	calc_rot_size(handler->rotate_info.angle <= 90 ? handler->rotate_info.angle : handler->rotate_info.angle-90,
+	printf("angle: %.17f\n", angle);
+
+	calc_rot_size(angle,
 				  handler->imginfo.width, handler->imginfo.height,
 				  &handler->imginfo.new_width, &handler->imginfo.new_height);
+
+	angle = to_radians(handler->rotate_info.angle);
 	
+    printf("old_height: %0d\n", handler->imginfo.height);
+    printf("old_width: %0d\n", handler->imginfo.width);
+    printf("new_height: %0d\n", handler->imginfo.new_height);
+    printf("new_width: %0d\n", handler->imginfo.new_width);
+
 	x_center_in = floor(handler->imginfo.width / 2);
 	y_center_in = floor(handler->imginfo.height / 2);
 
@@ -801,13 +826,13 @@ int rotate(ppm_image_handler *handler)
             nX = round(newX + x_center_in);
             nY = round(newY + y_center_in);
 
-			printf("x: %0d y: %0d nX: %0d nY: %0d newX: %0f newY: %0f\n", xx, yy, nX, nY, newX, newY);
-			printf("x_center_in: %0d y_center_in: %0d\n", x_center_in, y_center_in);
-			printf("angle: %.17f\n", angle);
-			printf("-(sin(angle): %.17f\n", -(sin(angle)));
-			printf("-(sin(angle) * (double)(x0)): %0f\n", -(sin(angle) * (double)(x0)));
-			printf("(cos(angle) * (double) (y0)): %0f\n", (cos(angle) * (double) (y0)));
-			printf("newY + y_center_in: %.17f\n", newY + y_center_in);
+			//printf("x: %0d y: %0d nX: %0d nY: %0d newX: %0f newY: %0f\n", xx, yy, nX, nY, newX, newY);
+			//printf("x_center_in: %0d y_center_in: %0d\n", x_center_in, y_center_in);
+			//printf("angle: %.17f\n", angle);
+			//printf("-(sin(angle): %.17f\n", -(sin(angle)));
+			//printf("-(sin(angle) * (double)(x0)): %0f\n", -(sin(angle) * (double)(x0)));
+			//printf("(cos(angle) * (double) (y0)): %0f\n", (cos(angle) * (double) (y0)));
+			//printf("newY + y_center_in: %.17f\n", newY + y_center_in);
 			if ((nX < handler->imginfo.width) && (nY < handler->imginfo.height) && (nY >= 0) && (nX >= 0))
             {
 				handler->imginfo.new_buff[yy+y_offset][xx+x_offset] = handler->imginfo.buff[nY][nX];
