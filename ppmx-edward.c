@@ -114,40 +114,6 @@ int getImageInfo(ppm_image_handler *handler);
 int rotateGrayScaleImage(ppm_image_handler *handler);
 void releaseBuffer(ppm_image_handler *handler);
 
-#ifdef TEST_RESIZE
-int main(int argc, char **argv)
-{
-    ppm_image_handler handler;
-
-    handler.filename = argv[1];
-    handler.arg_flag.resize_enable = 1;
-
-    if (doProcessPPM(&handler) != 0)
-    {
-        return -1;
-    }
-
-    return 0;
-}
-#endif
-#ifdef TEST_ROTATE
-int main(int argc, char **argv)
-{
-    ppm_image_handler handler;
-
-    handler.filename = argv[1];
-    handler.arg_flag.rotate_enable = 1;
-    handler.arg_flag.resize_enable = 0;
-
-    if (doProcessPPM(&handler) != 0)
-    {
-        return -1;
-    }
-
-    return 0;
-}
-#endif
-#ifdef TEST_COMARGS
 void usage()
 {
 	printf("ppmx-edward [options] (input filename)\n");
@@ -192,7 +158,7 @@ int main(int argc, char **argv)
 			{
 				handler.arg_flag.rotate_enable = 1;
 				handler.rotate_info.angle = (float) atoi(&argv[x][2]);
-				printf("handler.rotate_info.angle: %0f\n", handler.rotate_info.angle);
+				printf("handler.rotate_info.angle: %0.0f\n", handler.rotate_info.angle);
 				if (handler.rotate_info.angle == 0)
 				{
 					printf("invalid option of rotate.\nallowed option is -r<degrees>.\n");
@@ -221,24 +187,6 @@ int main(int argc, char **argv)
 
     return 0;
 }
-#else
-int main(int argc, char **argv) 
-{
-    ppm_image_handler handler;
-    if (argc != 2)
-    {
-        printf("invalid number of arguments: %0d\n", argc);
-        printf("ppm_edward <file name>\n");
-        return -1;
-    }
-    handler.filename = argv[1];
-    if (doProcessPPM(&handler) != 0)
-    {
-        return -1;
-    }
-    return 0;
-}
-#endif
 
 // rotate and convert image to gray scale
 int rotateGrayScaleImage(ppm_image_handler *handler)
@@ -808,8 +756,8 @@ void calc_rot_size(float angle,
 	a = c * cos(theta1);
 	f = d * sin(theta1);
 	e = d * cos(theta1);
-	*new_width = floor(a + f);
-	*new_height = floor(b + e);
+	*new_width = round(a + f);
+	*new_height = round(b + e);
 }	
 
 int rotate(ppm_image_handler *handler)
@@ -826,26 +774,19 @@ int rotate(ppm_image_handler *handler)
 
 	angle = handler->rotate_info.angle;
 
-	if (angle > 270) angle = 360 - angle;
+	if (angle >= 270) angle = 360 - angle;
 	else if (angle > 180) angle = angle - 180;
-	else if (angle > 90) angle = angle - 90; // this will cause to
-											 // assign the old width
-											 // to new height and old
-											 // height to new width
-		
-	printf("angle degrees: %.17f radians: %.17f\n", handler->rotate_info.angle, to_radians(handler->rotate_info.angle));
-	printf("angle: %.17f\n", angle);
+	else if (angle > 90) angle = 180 - angle;
 
-	calc_rot_size(angle,
-				  handler->imginfo.width, handler->imginfo.height,
-				  &handler->imginfo.new_width, &handler->imginfo.new_height);
+	//printf("angle: %0.0f\n", angle);
 
+	calc_rot_size(angle, handler->imginfo.width, handler->imginfo.height, &handler->imginfo.new_width, &handler->imginfo.new_height);
 	angle = to_radians(handler->rotate_info.angle);
 	
-    printf("old_height: %0d\n", handler->imginfo.height);
-    printf("old_width: %0d\n", handler->imginfo.width);
-    printf("new_height: %0d\n", handler->imginfo.new_height);
-    printf("new_width: %0d\n", handler->imginfo.new_width);
+    //printf("old_height: %0d\n", handler->imginfo.height);
+    //printf("old_width: %0d\n", handler->imginfo.width);
+    //printf("new_height: %0d\n", handler->imginfo.new_height);
+    //printf("new_width: %0d\n", handler->imginfo.new_width);
 
 	x_center_in = floor(handler->imginfo.width / 2);
 	y_center_in = floor(handler->imginfo.height / 2);
