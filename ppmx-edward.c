@@ -749,21 +749,13 @@ int rotate(ppm_image_handler *handler)
 
 	angle = handler->rotate_info.angle;
 
-	if (angle > 270)
-	{
-		angle = 360 - angle;
-	}
-	else if (angle > 180)
-	{
-		angle = angle - 180;
-	}
-	else if (angle > 90)
-	{
-		// this will cause to assign the old width to new height and
-		// old height to new width
-		angle = angle - 90;
-	}
-
+	if (angle > 270) angle = 360 - angle;
+	else if (angle > 180) angle = angle - 180;
+	else if (angle > 90) angle = angle - 90; // this will cause to
+											 // assign the old width
+											 // to new height and old
+											 // height to new width
+		
 	printf("angle degrees: %.17f radians: %.17f\n", handler->rotate_info.angle, to_radians(handler->rotate_info.angle));
 	printf("angle: %.17f\n", angle);
 
@@ -793,7 +785,7 @@ int rotate(ppm_image_handler *handler)
     for (y = 0; y < handler->imginfo.new_height; y++)
     {
         handler->imginfo.new_buff[y] = (pixel *) malloc(handler->imginfo.new_width * sizeof(pixel));
-        memset(handler->imginfo.new_buff[y], 0xff, handler->imginfo.new_width * sizeof(pixel));
+        memset(handler->imginfo.new_buff[y], 0x00, handler->imginfo.new_width * sizeof(pixel));
         if (handler->imginfo.new_buff[y] == NULL)
         {
             return -1;
