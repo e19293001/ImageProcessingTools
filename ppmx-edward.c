@@ -111,8 +111,8 @@ void getNextChar(ppm_image_handler *handler);
 int getNextPixel(ppm_image_handler *handler, pixel *pix);
 int doProcessPPM(ppm_image_handler *handler);
 int getImageInfo(ppm_image_handler *handler);
-int rotateGrayScaleImage(ppm_image_handler *handler);
-void releaseBuffer(ppm_image_handler *handler);
+int rotateGrayScaleImage(ppm_image_handler *handler); // this can be removed
+void releaseBuffer(ppm_image_handler *handler); // this can be simplified without using handler
 
 void usage()
 {
@@ -130,8 +130,12 @@ void usage()
 int main(int argc, char **argv)
 {
 	ppm_image_handler handler;
-	handler.filename = NULL;
 	int x;
+
+	handler.arg_flag.rotate_enable = 0;
+	handler.arg_flag.resize_enable = 0;
+	handler.filename = NULL;
+
 	for (x = 1; x < argc; x++)
 	{
 		if (argv[x][0] == '-') {
@@ -153,12 +157,19 @@ int main(int argc, char **argv)
 			else if (argv[x][1] == 'w')
 			{
 				handler.arg_flag.resize_enable = 1;
+				handler.scale_info.output_size = (int) atoi(&argv[x][2]);
 			}
 			else if (argv[x][1] == 'r')
 			{
 				handler.arg_flag.rotate_enable = 1;
 				handler.rotate_info.angle = (float) atoi(&argv[x][2]);
 				printf("handler.rotate_info.angle: %0.0f\n", handler.rotate_info.angle);
+                if (handler.rotate_info.angle < 0 || handler.rotate_info.angle >= 360)
+                {
+                    printf("invalid option for rotate. it is less than 0 or greater than 359\n");
+                    exit(0);
+                }
+                
 				if (handler.rotate_info.angle == 0)
 				{
 					printf("invalid option of rotate.\nallowed option is -r<degrees>.\n");
@@ -566,6 +577,7 @@ void calc_contributions(img_scale_info *scale_info)
     float **indices;
     float **weights;
 
+    printf("scale_info->output_size: %0d\n", scale_info->output_size);
     indices = (float **) malloc(scale_info->output_size * sizeof(float*));
     weights = (float **) malloc(scale_info->output_size * sizeof(float*));
 
@@ -590,8 +602,12 @@ void calc_contributions(img_scale_info *scale_info)
             return;
         }
     }
-
     aux = (int *) malloc(aux_size * (sizeof(int)));
+    if (aux == NULL)
+    {
+        printf("fatal. allocating aux\n");
+        return;
+    }            
     memset(aux, 0, aux_size);
 
     y = 0;
@@ -605,10 +621,10 @@ void calc_contributions(img_scale_info *scale_info)
         aux[y++] = x;
     }
 
-    for (x = 0; x < aux_size; x++)
-    {
-        printf("aux[%0d]: %0d\n", x, aux[x]);
-    }
+    //for (x = 0; x < aux_size; x++)
+    //{
+    //    printf("aux[%0d]: %0d\n", x, aux[x]);
+    //}
 
     // generate indices
     for (y = 0; y < scale_info->output_size; y++)
@@ -640,6 +656,7 @@ void calc_contributions(img_scale_info *scale_info)
         }
     }
 
+    printf("scale_info->P: %0d\n", scale_info->P);
     scale_info->num_non_zero = 0;
     for (x = 0; x < scale_info->P; x++)
     {
@@ -674,21 +691,25 @@ void calc_contributions(img_scale_info *scale_info)
         }
     }
 
-    for (y = 0; y < scale_info->output_size; y++)
-    {
-        for (x = 0; x < scale_info->num_non_zero; x++)
-        {
-            printf("scale_info->weights[%0d][%0d] = %0f\n", y, x, scale_info->weights[y][x]);
-        }
-    }
+    printf("scale_info->output_size: %0d\n", scale_info->output_size);
+    printf("scale_info->num_non_zero: %0d\n", scale_info->num_non_zero);
+        
+    //for (y = 0; y < scale_info->output_size; y++)
+    //{
+    //    for (x = 0; x < scale_info->num_non_zero; x++)
+    //    {
+    //        printf("scale_info->weights[%0d][%0d] = %0f\n", y, x, scale_info->weights[y][x]);
+    //    }
+    //}
 
-    for (y = 0; y < scale_info->output_size; y++)
-    {
-        for (x = 0; x < scale_info->num_non_zero; x++)
-        {
-            printf("scale_info->indices[%0d][%0d] = %0d\n", y, x, scale_info->indices[y][x]);
-        }
-    }
+	//
+    //for (y = 0; y < scale_info->output_size; y++)
+    //{
+    //    for (x = 0; x < scale_info->num_non_zero; x++)
+    //    {
+    //        printf("scale_info->indices[%0d][%0d] = %0d\n", y, x, scale_info->indices[y][x]);
+    //    }
+    //}
 
     for (y = 0; y < scale_info->output_size; y++)
     {
@@ -699,6 +720,7 @@ void calc_contributions(img_scale_info *scale_info)
     free(weights);
     free(indices);
     free(aux);
+    printf("done calc_contributions\n");
 }
 
 void release_scale_info(img_scale_info *scale_info)
@@ -724,7 +746,7 @@ void init_img_scale_info(ppm_image_handler *handler)
     handler->scale_info.P = handler->scale_info.kernel_width + 2;
     handler->scale_info.input_size = handler->imginfo.width;
     handler->imginfo.new_height = handler->imginfo.height;
-    handler->scale_info.output_size = handler->imginfo.width / 2; // need to set from command line argument
+    //handler->scale_info.output_size = handler->imginfo.width / 2; // need to set from command line argument
     handler->scale_info.scale = getScaleFromSize(handler->scale_info.input_size, handler->scale_info.output_size);
 }
 
@@ -772,6 +794,16 @@ int rotate(ppm_image_handler *handler)
 	int x_offset;
 	int y_offset;
 
+    img_scale_info scale_info;
+
+	if (handler->arg_flag.resize_enable)
+	{
+		releaseBuffer(handler);
+		handler->imginfo.width = handler->imginfo.new_width;
+		handler->imginfo.height = handler->imginfo.new_height;
+		handler->imginfo.buff = handler->imginfo.new_buff;
+	}
+
 	angle = handler->rotate_info.angle;
 
 	if (angle >= 270) angle = 360 - angle;
@@ -783,10 +815,11 @@ int rotate(ppm_image_handler *handler)
 	calc_rot_size(angle, handler->imginfo.width, handler->imginfo.height, &handler->imginfo.new_width, &handler->imginfo.new_height);
 	angle = to_radians(handler->rotate_info.angle);
 	
-    //printf("old_height: %0d\n", handler->imginfo.height);
-    //printf("old_width: %0d\n", handler->imginfo.width);
-    //printf("new_height: %0d\n", handler->imginfo.new_height);
-    //printf("new_width: %0d\n", handler->imginfo.new_width);
+	printf("rotate\n");
+    printf("old_height: %0d\n", handler->imginfo.height);
+    printf("old_width: %0d\n", handler->imginfo.width);
+    printf("new_height: %0d\n", handler->imginfo.new_height);
+    printf("new_width: %0d\n", handler->imginfo.new_width);
 
 	x_center_in = floor(handler->imginfo.width / 2);
 	y_center_in = floor(handler->imginfo.height / 2);
@@ -810,6 +843,13 @@ int rotate(ppm_image_handler *handler)
         }
     }
 
+    scale_info.kernel_width = 4.0;
+    scale_info.P = scale_info.kernel_width + 2;
+    scale_info.input_size = handler->imginfo.width;
+    scale_info.output_size = handler->imginfo.width;
+    scale_info.scale = getScaleFromSize(handler->imginfo.width, scale_info.output_size);
+    calc_contributions(&scale_info);
+    
 	for (y = 0; y < handler->imginfo.new_height; y++)
     {
         for (x = 0; x < handler->imginfo.new_width; x++)
@@ -838,7 +878,34 @@ int rotate(ppm_image_handler *handler)
 
 			if ((nX < handler->imginfo.width) && (nY < handler->imginfo.height) && (nY >= 0) && (nX >= 0))
             {
-				handler->imginfo.new_buff[yy+y_offset][xx+x_offset] = handler->imginfo.buff[nY][nX];
+                int z; // for interpolation
+                float sum_r = 0.0f;
+                float sum_g = 0.0f;
+                float sum_b = 0.0f;
+
+                for (z = 0; z < scale_info.num_non_zero; z++)
+                {
+                    int index = scale_info.indices[nX][z];
+                    //printf("index: %0d\n", index);
+
+                    sum_r = sum_r + handler->imginfo.buff[nY][index].r * scale_info.weights[nX][z];
+                    sum_g = sum_g + handler->imginfo.buff[nY][index].g * scale_info.weights[nX][z];
+                    sum_b = sum_b + handler->imginfo.buff[nY][index].b * scale_info.weights[nX][z];
+                }
+                
+                if (sum_r < 0.0f) sum_r = 0.0f;
+                if (sum_g < 0.0f) sum_g = 0.0f;
+                if (sum_b < 0.0f) sum_b = 0.0f;
+
+                if (sum_r >= 256) sum_r = 255.0f;
+                if (sum_g >= 256) sum_g = 255.0f;
+                if (sum_b >= 256) sum_b = 255.0f;
+
+                handler->imginfo.new_buff[yy+y_offset][xx+x_offset].r = (int) sum_r;
+                handler->imginfo.new_buff[yy+y_offset][xx+x_offset].g = (int) sum_g;
+                handler->imginfo.new_buff[yy+y_offset][xx+x_offset].b = (int) sum_b;
+                
+				//handler->imginfo.new_buff[yy+y_offset][xx+x_offset] = handler->imginfo.buff[nY][nX];
             }
         }
     }
@@ -853,6 +920,7 @@ int imresize(ppm_image_handler *handler)
 
     handler->imginfo.new_height = handler->imginfo.height;
     printf("new_height: %0d\n", handler->imginfo.new_height);
+	printf("output_size: %0d\n", handler->scale_info.output_size);
     handler->imginfo.new_width = handler->scale_info.output_size;
 
 
@@ -954,6 +1022,8 @@ int doProcessPPM(ppm_image_handler *handler)
         return -1;
     }
   
+	printf("height: %0d\n", handler->imginfo.height);
+	printf("width: %0d\n", handler->imginfo.width);
 //    // process the image
 //    if (rotateGrayScaleImage(handler) != 0)
 //    {
