@@ -561,6 +561,25 @@ float cubic(float x)
     return ret;
 }
 
+float cubic2(float x, float a)
+{
+    float ret = 0;
+    float absx = fabs(x);
+    float absx2 = absx * absx;
+    float absx3 = absx2 * absx;
+
+    if (absx < 1) 
+    {
+        ret = (-a + 2) * absx3 + (a - 3) * absx2 + 1;
+    }
+    else if (absx < 2)
+    {
+        ret = -a * absx3 + 5 * a * absx2 - 8 * a * absx + 4 * a;
+    }
+            
+    return ret;
+}
+
 int mod(int a, int b)
 {
     int r = 0;
@@ -794,15 +813,15 @@ int rotate(ppm_image_handler *handler)
 	int x_offset;
 	int y_offset;
 
-    img_scale_info scale_info;
+    //img_scale_info scale_info;
 
-	if (handler->arg_flag.resize_enable)
-	{
-		releaseBuffer(handler);
-		handler->imginfo.width = handler->imginfo.new_width;
-		handler->imginfo.height = handler->imginfo.new_height;
-		handler->imginfo.buff = handler->imginfo.new_buff;
-	}
+	//if (handler->arg_flag.resize_enable)
+	//{
+		//releaseBuffer(handler);
+		//handler->imginfo.width = handler->imginfo.new_width;
+		//handler->imginfo.height = handler->imginfo.new_height;
+		//handler->imginfo.buff = handler->imginfo.new_buff;
+	//}
 
 	angle = handler->rotate_info.angle;
 
@@ -843,13 +862,6 @@ int rotate(ppm_image_handler *handler)
         }
     }
 
-    scale_info.kernel_width = 4.0;
-    scale_info.P = scale_info.kernel_width + 2;
-    scale_info.input_size = handler->imginfo.width;
-    scale_info.output_size = handler->imginfo.width;
-    scale_info.scale = getScaleFromSize(handler->imginfo.width, scale_info.output_size);
-    calc_contributions(&scale_info);
-    
 	for (y = 0; y < handler->imginfo.new_height; y++)
     {
         for (x = 0; x < handler->imginfo.new_width; x++)
@@ -862,8 +874,8 @@ int rotate(ppm_image_handler *handler)
             int x0;
             int y0;
 
-            int nX;
-            int nY;
+            float nX;
+            float nY;
 
 			xx = x - x_offset;
 			yy = y - y_offset;
@@ -873,39 +885,57 @@ int rotate(ppm_image_handler *handler)
             newX = (cos(angle) * (float) (x0)) + (sin(angle) * (float) (y0));
             newY = -(sin(angle) * (float)(x0)) + (cos(angle) * (float) (y0));
 
-            nX = round(newX + x_center_in);
-            nY = round(newY + y_center_in);
+            //nX = round(newX + x_center_in);
+            //nY = round(newY + y_center_in);
+
+            nX = (newX + x_center_in);
+            nY = (newY + y_center_in);
 
 			if ((nX < handler->imginfo.width) && (nY < handler->imginfo.height) && (nY >= 0) && (nX >= 0))
             {
-                int z; // for interpolation
-                float sum_r = 0.0f;
-                float sum_g = 0.0f;
-                float sum_b = 0.0f;
+                float q_r = 0.0f;
+                float q_g = 0.0f;
+                float q_b = 0.0f;
+                int j;
+                int i;
 
-                for (z = 0; z < scale_info.num_non_zero; z++)
+                if (nX > 1 && nY > 1 && nX < handler->imginfo.width - 3 && nY < handler->imginfo.height - 3)
                 {
-                    int index = scale_info.indices[nX][z];
-                    //printf("index: %0d\n", index);
+                    for (j = 0; j < 4; j++) 
+                    {
+                        int v = floor(nY) - 1 + j;
+                        float p_r = 0.0f;
+                        float p_g = 0.0f;
+                        float p_b = 0.0f;
+                        for (i = 0; i < 4; i++)
+                        {
+                            int u = floor(nX) - 1 + i;
+                            p_r += (handler->imginfo.buff[v][u].r * cubic(nX - u));
+                            p_g += (handler->imginfo.buff[v][u].g * cubic(nX - u));
+                            p_b += (handler->imginfo.buff[v][u].b * cubic(nX - u));
+                        }
 
-                    sum_r = sum_r + handler->imginfo.buff[nY][index].r * scale_info.weights[nX][z];
-                    sum_g = sum_g + handler->imginfo.buff[nY][index].g * scale_info.weights[nX][z];
-                    sum_b = sum_b + handler->imginfo.buff[nY][index].b * scale_info.weights[nX][z];
+                        q_r += p_r * cubic(nY - v);
+                        q_g += p_g * cubic(nY - v);
+                        q_b += p_b * cubic(nY - v);
+                    }
+
+                    if (q_r < 0) q_r = 0.0f;
+                    if (q_g < 0) q_g = 0.0f;
+                    if (q_b < 0) q_b = 0.0f;
+                    
+                    if (q_r >= 256) q_r = 255.0f;
+                    if (q_g >= 256) q_g = 255.0f;
+                    if (q_b >= 256) q_b = 255.0f;
+
+                    handler->imginfo.new_buff[yy+y_offset][xx+x_offset].r = (int) q_r;
+                    handler->imginfo.new_buff[yy+y_offset][xx+x_offset].g = (int) q_g;
+                    handler->imginfo.new_buff[yy+y_offset][xx+x_offset].b = (int) q_b;
                 }
-                
-                if (sum_r < 0.0f) sum_r = 0.0f;
-                if (sum_g < 0.0f) sum_g = 0.0f;
-                if (sum_b < 0.0f) sum_b = 0.0f;
-
-                if (sum_r >= 256) sum_r = 255.0f;
-                if (sum_g >= 256) sum_g = 255.0f;
-                if (sum_b >= 256) sum_b = 255.0f;
-
-                handler->imginfo.new_buff[yy+y_offset][xx+x_offset].r = (int) sum_r;
-                handler->imginfo.new_buff[yy+y_offset][xx+x_offset].g = (int) sum_g;
-                handler->imginfo.new_buff[yy+y_offset][xx+x_offset].b = (int) sum_b;
-                
-				//handler->imginfo.new_buff[yy+y_offset][xx+x_offset] = handler->imginfo.buff[nY][nX];
+                else
+                {
+                    handler->imginfo.new_buff[yy+y_offset][xx+x_offset] = handler->imginfo.buff[(int)nY][(int)nX];
+                }
             }
         }
     }
