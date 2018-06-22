@@ -1032,8 +1032,6 @@ int mono(ppm_image_handler *handler) // TODO: should return error
     int x;
     int y;
 
-    int matrix[4][4] = {{1, 9, 3, 11} , {13, 5, 15, 7} , {4, 12, 2, 10} , {16, 8, 14, 6}};
-
     handler->imginfo.file_type = FILETYPE_PBM;
     handler->imginfo.new_height = handler->imginfo.height;
     handler->imginfo.new_width = handler->imginfo.width;
@@ -1052,92 +1050,109 @@ int mono(ppm_image_handler *handler) // TODO: should return error
         if (handler->imginfo.new_buff[y] == NULL) return -1;
     }
 
+//    int matrix[] = {1, 33,  9, 41, 3,  35, 11, 43, 49, 17, 57, 25, 51, 19, 59, 27, 13, 45, 5, 
+//                37, 15, 47, 7, 39, 61, 29, 53, 21, 63, 31, 55, 23, 4, 36, 12, 44, 2, 34, 10, 42, 52,
+//                20, 60, 28, 50, 18, 58, 26, 16, 48, 8, 40, 14, 46, 6, 38, 64, 32, 56, 24, 62, 30,
+//                54, 22};
+
+    int k = 8;
+    int matrix[] = {  0, 32,  8, 40,  2, 34, 10, 42,
+                     48, 16, 56, 24, 50, 18, 58, 26,
+                     12, 44,  4, 36, 14, 46,  6, 38,
+                     60, 28, 52, 20, 62, 30, 54, 22,
+                      3, 35, 11, 43,  1, 33,  9, 41,
+                     51, 19, 59, 27, 49, 17, 57, 25,
+                     15, 47,  7, 39, 13, 45,  5, 37,
+                     63, 31, 55, 23, 61, 29, 53, 21 };
+
+    float smoothKernel[3][3];
+
+    smoothKernel[0][0] = 1.0; smoothKernel[1][0] = 1.0; smoothKernel[2][0] = 1.0;
+    smoothKernel[0][1] = 1.0; smoothKernel[1][1] = -8.0; smoothKernel[2][1] = 1.0;
+    smoothKernel[0][2] = 1.0; smoothKernel[1][2] = 1.0; smoothKernel[2][2] = 1.0;
+
+//    int matrix[] = {34, 48, 40, 32, 29, 15, 23, 31, // dot diffusion
+//                    42, 58, 56, 53, 21,  5,  7, 10,
+//                    50, 62, 61, 45, 13,  1,  2, 18,
+//                    38, 46, 54, 37, 25, 17,  9, 26,
+//                    28, 14, 22, 30, 35, 49, 41, 33,
+//                    20,  4,  6, 11, 43, 59, 57, 52,
+//                    12,  0,  3, 19, 51, 63, 60, 44,
+//                    24, 16,  8, 27, 39, 47, 55, 36};
+
+    for (x = 0; x < 64; x++)
+        matrix[x] = matrix[x] * 4 - 1;
+
     for (y = 0; y < handler->imginfo.new_height; y++)
     {
         for (x = 0; x < handler->imginfo.new_width; x++)
         {
-            float mratio = 1.0 / 12;
-            float mfactor = 255.0 / 5;
 
-            unsigned char oldpixel = (unsigned char)((handler->imginfo.buff[y][x].r + handler->imginfo.buff[y][x].g + handler->imginfo.buff[y][x].b) / 3);
-            unsigned char value = oldpixel + (mratio * matrix[y%4][x%4] * mfactor);
-            if (value < 128)
-                handler->imginfo.new_buff[y][x].r = 1;
-            else
-                handler->imginfo.new_buff[y][x].r = 0;
-            
-/*
-                
-            //handler->imginfo.buff[y][x].r
-
-            //handler->imginfo.new_buff[y][x].r = (unsigned char) a;
-            
+            // get the average of all neighbors
+            int alpha = 0.9;
+            int zz = k >> 1;
             handler->imginfo.new_buff[y][x].r = (unsigned char)((handler->imginfo.buff[y][x].r + handler->imginfo.buff[y][x].g + handler->imginfo.buff[y][x].b) / 3);
-            if (handler->imginfo.new_buff[y][x].r < 128)
-            {
-                handler->imginfo.new_buff[y][x].r = 1;
-            }
-            else
-            {
-                handler->imginfo.new_buff[y][x].r = 0;
-            }
-
-
-            unsigned char old_r = handler->imginfo.buff[y][x].r;
-            
-            unsigned char new_r = round(old_r / 255);
-            
-            unsigned char quant_error_r;
-            
-            handler->imginfo.buff[y][x].r = new_r;
-            
-            quant_error_r = old_r - new_r;
-            
-            
-            // floyd steignberg
-            if (y != 0 && y != handler->imginfo.new_height-1 && x != 0 && x != handler->imginfo.new_width-1)
-            {
-                handler->imginfo.buff[y][x + 1].r = handler->imginfo.buff[y][x + 1].r + quant_error_r * 7 /16;
-                handler->imginfo.buff[y][x - 1].r = handler->imginfo.buff[y][x - 1].r + quant_error_r * 3 / 16;
-                handler->imginfo.buff[y + 1][x].r = handler->imginfo.buff[y + 1][x].r + quant_error_r * 5 / 16;
-                handler->imginfo.buff[y + 1][x + 1].r = handler->imginfo.buff[y + 1][x + 1].r + quant_error_r * 1 / 16;
-            }
-
-            //// jarvis
-            //if (y >= 2 && y <= handler->imginfo.new_height-3 && x >= 2 && x <= handler->imginfo.new_width-3)
+            //if (y >= zz && x >= zz && y < handler->imginfo.new_height - zz - 1&& x < handler->imginfo.new_width - zz - 1)
             //{
-            //    handler->imginfo.buff[y][x + 1].r = handler->imginfo.buff[y][x + 1].r + quant_error_r * 7 /48;
-            //    handler->imginfo.buff[y][x + 2].r = handler->imginfo.buff[y][x + 2].r + quant_error_r * 5 /48;
-            //    handler->imginfo.buff[y + 1][x - 2].r = handler->imginfo.buff[y + 1][x - 2].r + quant_error_r * 3 / 48;
-            //    handler->imginfo.buff[y + 1][x - 1].r = handler->imginfo.buff[y + 1][x - 1].r + quant_error_r * 5 / 48;
-            //    handler->imginfo.buff[y + 1][x    ].r = handler->imginfo.buff[y + 1][x    ].r + quant_error_r * 7 / 48;
-            //    handler->imginfo.buff[y + 1][x + 1].r = handler->imginfo.buff[y + 1][x + 1].r + quant_error_r * 5 / 48;
-            //    handler->imginfo.buff[y + 1][x + 2].r = handler->imginfo.buff[y + 1][x + 2].r + quant_error_r * 3 / 48;
+            //    int yy;
+            //    int xx;
+            //    int sum_r = 0;
+            //    for (yy = -zz; yy <= zz; ++yy) {
+            //        for (xx = -zz; xx <= zz; ++xx) {
+            //            sum_r += ((handler->imginfo.buff[y+yy][x+xx].r + handler->imginfo.buff[y+yy][x+xx].g + handler->imginfo.buff[y+yy][x+xx].b)/3) * smoothKernel[yy+zz][xx+zz];
+            //        }
+            //    }
+            //    sum_r = (handler->imginfo.new_buff[y][x].r/3) - 0.2 * sum_r;
             //
-            //    handler->imginfo.buff[y + 2][x - 2].r = handler->imginfo.buff[y + 2][x - 2].r + quant_error_r * 1 / 48;
-            //    handler->imginfo.buff[y + 2][x - 1].r = handler->imginfo.buff[y + 2][x - 1].r + quant_error_r * 3 / 48;
-            //    handler->imginfo.buff[y + 2][x    ].r = handler->imginfo.buff[y + 2][x    ].r + quant_error_r * 5 / 48;
-            //    handler->imginfo.buff[y + 2][x + 1].r = handler->imginfo.buff[y + 2][x + 1].r + quant_error_r * 3 / 48;
-            //    handler->imginfo.buff[y + 2][x + 2].r = handler->imginfo.buff[y + 2][x + 2].r + quant_error_r * 1 / 48;
+            //    if (sum_r < 0.0f) sum_r = 0.0f;
+            //
+            //    if (sum_r >= 256.0f) sum_r = 255.0f;
+            //
+            //    handler->imginfo.new_buff[y][x].r = (char)sum_r;
+            //    //printf("sum_r: %0d\n", sum_r);
             //}
-            
-            //handler->imginfo.new_buff[y][x].r = (unsigned char)((handler->imginfo.buff[y][x].r + handler->imginfo.buff[y][x].g + handler->imginfo.buff[y][x].b) / 3);
-            if (handler->imginfo.new_buff[y][x].r < 128)
-            {
-                handler->imginfo.new_buff[y][x].r = 1;
-            }
-            else
-            {
-                handler->imginfo.new_buff[y][x].r = 0;
-            }
-*/
-            //printf("%0d ", handler->imginfo.new_buff[y][x].r);
+            //
+            ////unsigned char oldpixel = handler->imginfo.buff[y][x].r;
+            //if (handler->imginfo.new_buff[y][x].r >= matrix[x%k*k+y%k])
+            //    handler->imginfo.new_buff[y][x].r = 0;
+            //else
+            //    handler->imginfo.new_buff[y][x].r = 1;
 
-            //printf("x: %0d y: %0d val: %0d\n", x, y, handler->imginfo.buff[y][x].r);
+            //if (y >= zz && x >= zz && y < handler->imginfo.new_height - zz - 1 && x < handler->imginfo.new_width - zz - 1)
+            //{
+            //    int yy;
+            //    int xx;
+            //    int sum_r = 0;
+            //    int sum_g = 0;
+            //    int sum_b = 0;
+            //    for (yy = -zz; yy <= zz; ++yy) {
+            //        for (xx = -zz; xx <= zz; ++xx) {
+            //            sum_r += handler->imginfo.new_buff[y+yy][x+xx].r;
+            //        }
+            //    }
+            //    handler->imginfo.new_buff[y][x].r = (handler->imginfo.new_buff[y+yy][x+xx].r - alpha * (sum_r/9)) / (1 - alpha);
+            //}
+
 
         }
-        //printf("\n");
     }
+
+//    int matrix[4][4] = {{1, 9, 3, 11} , {13, 5, 15, 7} , {4, 12, 2, 10} , {16, 8, 14, 6}};
+//    for (y = 0; y < handler->imginfo.new_height; y++)
+//    {
+//        for (x = 0; x < handler->imginfo.new_width; x++)
+//        {
+//            float mratio = 1.0 / 12;
+//            float mfactor = 255.0 / 5;
+//
+//            unsigned char oldpixel = (unsigned char)((handler->imginfo.buff[y][x].r + handler->imginfo.buff[y][x].g + handler->imginfo.buff[y][x].b) / 3);
+//            unsigned char value = oldpixel + (mratio * matrix[y%4][x%4] * mfactor);
+//            if (value < 128)
+//                handler->imginfo.new_buff[y][x].r = 1;
+//            else
+//                handler->imginfo.new_buff[y][x].r = 0;
+//        }
+//    }
 
     return 0;
 }
@@ -1154,16 +1169,10 @@ int gray(ppm_image_handler *handler) // TODO: should return error
     printf("width: %0d\n", handler->imginfo.new_width);
 
     handler->imginfo.new_buff = (pixel **) malloc(handler->imginfo.new_height * sizeof(pixel *));
-    if (handler->imginfo.new_buff == NULL)
-    {
-        return -1;
-    }
+    if (handler->imginfo.new_buff == NULL) return -1;
 
     for (y = 0; y < handler->imginfo.new_height; y++)
-    {
-        handler->imginfo.new_buff[y] = (pixel *) malloc(handler->imginfo.new_width * sizeof(pixel));
-        if (handler->imginfo.new_buff[y] == NULL) return -1;
-    }
+        if ((handler->imginfo.new_buff[y] = (pixel *) malloc(handler->imginfo.new_width * sizeof(pixel))) == NULL) return -1;
 
     for (y = 0; y < handler->imginfo.new_height; y++)
         for (x = 0; x < handler->imginfo.new_width; x++)
