@@ -105,7 +105,7 @@ typedef struct ppm_image_handler {
     img_rotate_info rotate_info;
 } ppm_image_handler;
 
-void calc_contributions(img_scale_info *scale_info);
+int calc_contributions(img_scale_info *scale_info);
 int mod(int a, int b);
 float cubic(float x);
 void init_img_scale_info(ppm_image_handler *handler);
@@ -118,6 +118,7 @@ int doProcessPPM(ppm_image_handler *handler);
 int getImageInfo(ppm_image_handler *handler);
 int rotateGrayScaleImage(ppm_image_handler *handler); // this can be removed
 void releaseBuffer(ppm_image_handler *handler); // this can be simplified without using handler
+int buffalloc(pixel ***new_buff, unsigned int height, unsigned int width);
 
 void usage()
 {
@@ -143,7 +144,6 @@ int main(int argc, char **argv)
 	handler.arg_flag.flipv_enable = 0;
 	handler.arg_flag.fliph_enable = 0;
     handler.arg_flag.mono_enable = 0;
-    
 	handler.filename = NULL;
 
 	for (x = 1; x < argc; x++)
@@ -152,12 +152,10 @@ int main(int argc, char **argv)
 			if (argv[x][1] == 'f') {
 				if (argv[x][2] == 'h')
 				{
-					printf("flip horizontal\n");
                     handler.arg_flag.fliph_enable = 1;
 				}
 				else if (argv[x][2] == 'v')
 				{
-					printf("flip vertical\n");
                     handler.arg_flag.flipv_enable = 1;
 				}
 				else
@@ -175,7 +173,6 @@ int main(int argc, char **argv)
 			{
 				handler.arg_flag.rotate_enable = 1;
 				handler.rotate_info.angle = (float) atoi(&argv[x][2]);
-				printf("handler.rotate_info.angle: %0.0f\n", handler.rotate_info.angle);
                 if (handler.rotate_info.angle < 0 || handler.rotate_info.angle >= 360)
                 {
                     printf("invalid option for rotate. it is less than 0 or greater than 359\n");
@@ -191,12 +188,10 @@ int main(int argc, char **argv)
             else if (strcmp(&argv[x][1], "gray") == 0)
             {
                 handler.arg_flag.gray_enable = 1;
-                printf("gray\n");
             }
 			else if (strcmp(&argv[x][1], "mono") == 0)
 			{
                 handler.arg_flag.mono_enable = 1;
-				printf("mono\n");
 			}
 		}
 		else
@@ -209,29 +204,9 @@ int main(int argc, char **argv)
 		usage();
 		exit(0);
 	}
-    if (doProcessPPM(&handler) != 0)
-    {
-        return -1;
-    }
+    if (doProcessPPM(&handler) != 0) return -1;
 
     return 0;
-}
-
-void printBinary(unsigned char t)
-{
-    int x;
-    for (x = 0; x < 8; x++)
-    {
-        if ((t << x) & (1 << 7))
-        {
-            printf("1");
-        }
-        else
-        {
-            printf("0");
-        }
-    }
-    printf("\n");
 }
 
 // write output image to file
@@ -243,8 +218,6 @@ int putImageToFile(ppm_image_handler *handler)
     unsigned int x;
     unsigned int y;
     int error = 0;
-    //unsigned int img_sz;
-
 
     memset(fileout, '\0', MAX_HEADER_CHARS);
     strncpy(fileout, handler->filename, fileout_size);
@@ -335,39 +308,13 @@ int putImageToFile(ppm_image_handler *handler)
     {
         unsigned char tmp = 0;
         int z = 0;
-        //printBinary(0xAB);
-        printf("\n");
-        
-        //for (y = 0; y < handler->imginfo.new_height; y++)
-        //{
-        //    z = 0;
-        //    tmp = 1;
-        //    for (x = 0; x < (handler->imginfo.new_width); x++)
-        //    {
-        //        printf("%0d", handler->imginfo.new_buff[y][x].r);
-        //        z = z | (handler->imginfo.new_buff[y][x].r << tmp);
-        //        //printf("[ %0d ] ", z);
-        //        //printBinary(z);
-        //        if (tmp % 8 == 0)
-        //        {
-        //            printf(" ");
-        //            tmp = 0;
-        //        }
-        //        tmp++;
-        //    }
-        //    printf("\n");
-        //}
-
         for (y = 0; y < handler->imginfo.new_height; y++)
         {
             for (x = 0, tmp = 1, z = 0; x < (handler->imginfo.new_width); x++, tmp++)
             {
-                //printf("%0d", handler->imginfo.new_buff[y][x].r);
-                //printf("[ %0d ] ", z);
                 z = z | (handler->imginfo.new_buff[y][x].r << (8 - tmp));
                 if (tmp % 8 == 0)
                 {
-                    //printBinary(z);
                     if ((error = fwrite(&z,1, 1, fofp)) != 1)
                     {
                         printf("failed in writing to %s\n", fileout);
@@ -376,19 +323,15 @@ int putImageToFile(ppm_image_handler *handler)
                     tmp = 0;
                     z = 0;
                 }
-                //tmp++;
             }
-            //printf("tmp: %0d\n", tmp);
             if (tmp-1 != 0)
             {
-                //printBinary(z);
                 if ((error = fwrite(&z,1, 1, fofp)) != 1)
                 {
                     printf("failed in writing to %s\n", fileout);
                     return -1;
                 }
             }
-            //printf("\n");
         }
     }
     else
@@ -419,8 +362,8 @@ int putImageToFile(ppm_image_handler *handler)
         free(handler->imginfo.new_buff[y]);
 
     fclose(fofp);
-    if (handler->imginfo.new_height != 0 || handler->imginfo.new_height != 0)
-        free(handler->imginfo.new_buff);
+
+    if (handler->imginfo.new_height != 0 || handler->imginfo.new_height != 0) free(handler->imginfo.new_buff);
 
     return 0;
 }
@@ -444,19 +387,10 @@ int getNextPixel(ppm_image_handler *handler, pixel *pix)
 
 void getNextChar(ppm_image_handler *handler)
 {
-    if (handler->tkn.current_char == EOF)
-    {
-        return;
-    }
+    if (handler->tkn.current_char == EOF) return;
 
-    if (handler->index_buffer < handler->filesize)
-    {
-        handler->tkn.current_char = handler->file_buffer[handler->index_buffer++];
-    }
-    else
-    {
-        handler->tkn.current_char = EOF;
-    }
+    if (handler->index_buffer < handler->filesize) handler->tkn.current_char = handler->file_buffer[handler->index_buffer++];
+    else handler->tkn.current_char = EOF;
 
     // ignore comments
     if (handler->tkn.current_char == '#')
@@ -475,10 +409,7 @@ int getNextToken(ppm_image_handler *handler, token *current_token)
     handler->tkn.kind = PPM_ERROR;
 
     // ignore spaces
-    while (isspace(handler->tkn.current_char))
-    {
-        getNextChar(handler);
-    }
+    while (isspace(handler->tkn.current_char)) getNextChar(handler);
 
     // if token is a digit
     if (isdigit(handler->tkn.current_char))
@@ -507,10 +438,7 @@ int getNextToken(ppm_image_handler *handler, token *current_token)
         }
         getNextChar(handler);
     }
-    else
-    { // return error for anything else
-        return -1;
-    }
+    else return -1; // return error for anything else
 
     *current_token = handler->tkn;
     return 0;
@@ -594,10 +522,7 @@ int getImageInfo(ppm_image_handler *handler)
         }
         for (x = 0; x < handler->imginfo.width; x++)
         {
-            if (getNextPixel(handler, &handler->imginfo.buff[y][x]) != 0)
-            {
-                return -1;
-            }            
+            if (getNextPixel(handler, &handler->imginfo.buff[y][x]) != 0) return -1;
         }
     }
     handler->imginfo.new_width = 0;
@@ -606,6 +531,7 @@ int getImageInfo(ppm_image_handler *handler)
     if (handler->filesize != handler->index_buffer)
     {
         printf("file format error\n");
+        return -1;
     }
 
     return 0;
@@ -615,9 +541,8 @@ void releaseBuffer(ppm_image_handler *handler)
 {
     unsigned int y;
     for (y = 0; y < handler->imginfo.height; y++)
-    {
         free(handler->imginfo.buff[y]);
-    }
+
     free(handler->imginfo.buff);
 }
 
@@ -628,15 +553,9 @@ float cubic(float x)
     float absx2 = absx * absx;
     float absx3 = absx2 * absx;
 
-    if (absx < 1) 
-    {
-        ret = (1.5*absx3) - (2.5*absx2) + 1;
-    }
+    if (absx < 1) ret = (1.5*absx3) - (2.5*absx2) + 1;
 
-    if ((1 < absx) && (absx <= 2))
-    {
-        ret = ret + ((-0.5*absx3) + (2.5*absx2) - (4*absx) + 2);
-    }
+    if ((1 < absx) && (absx <= 2)) ret = ret + ((-0.5*absx3) + (2.5*absx2) - (4*absx) + 2);
             
     return ret;
 }
@@ -648,7 +567,7 @@ int mod(int a, int b)
     return r < 0 ? r + b : r;
 }
 
-void calc_contributions(img_scale_info *scale_info)
+int calc_contributions(img_scale_info *scale_info)
 {
     int x = 0;
     int y = 0;
@@ -657,13 +576,12 @@ void calc_contributions(img_scale_info *scale_info)
     float **indices;
     float **weights;
 
-    printf("scale_info->output_size: %0d\n", scale_info->output_size);
     indices = (float **) malloc(scale_info->output_size * sizeof(float*));
     weights = (float **) malloc(scale_info->output_size * sizeof(float*));
-
-    if (indices == NULL || weights == NULL) {
+    if (indices == NULL || weights == NULL)
+    {
         printf("fatal. allocating indices\n");
-        return;
+        return - 1;
     }
 
     for (y = 0; y < scale_info->output_size; y++)
@@ -671,35 +589,25 @@ void calc_contributions(img_scale_info *scale_info)
         indices[y] = (float *) malloc(scale_info->P * sizeof(float));
         weights[y] = (float *) malloc(scale_info->P * sizeof(float));
 
-        if (indices[y] == NULL)
+        if (indices[y] == NULL || weights[y] == NULL)
         {
-            printf("fatal. allocating indices");
-            return;
-        }
-        if (weights[y] == NULL)
-        {
-            printf("fatal. allocating weights");
-            return;
+            printf("fatal. allocating memory for weights and indices");
+            return -1;
         }
     }
-    aux = (int *) malloc(aux_size * (sizeof(int)));
-    if (aux == NULL)
+
+    if ((aux = (int *) malloc(aux_size * (sizeof(int)))) == NULL)
     {
-        printf("fatal. allocating aux\n");
-        return;
+        printf("fatal. allocating memory for aux\n");
+        return - 1;
     }            
     memset(aux, 0, aux_size);
-
     y = 0;
     for (x = 0; x < scale_info->input_size; x++)
-    {
         aux[y++] = x;
-    }
 
     for (x = scale_info->input_size-1; x >= 0; x--)
-    {
         aux[y++] = x;
-    }
 
     // generate indices
     for (y = 0; y < scale_info->output_size; y++)
@@ -715,33 +623,21 @@ void calc_contributions(img_scale_info *scale_info)
 
     // generate weights
     for (y = 0; y < scale_info->output_size; y++)
-    {
         for (x = 0; x < scale_info->P; x++)
         {
             float u = ((y+1) / scale_info->scale) + (0.5 * (1 - (1 / scale_info->scale)));
             weights[y][x] = cubic(u - indices[y][x] - 1);
         }
-    }
 
     for (y = 0; y < scale_info->output_size; y++)
-    {
         for (x = 0; x < scale_info->P; x++)
-        {
             indices[y][x] = aux[mod(((int) indices[y][x]),aux_size)];
-        }
-    }
 
-    printf("scale_info->P: %0d\n", scale_info->P);
     scale_info->num_non_zero = 0;
     for (x = 0; x < scale_info->P; x++)
-    {
         if (weights[0][x] != 0.0f)
-        {
             scale_info->num_non_zero = scale_info->num_non_zero + 1;
-        }
-    }
 
-    printf("nonzero: %0d\n", scale_info->num_non_zero);
     scale_info->indices = (int **) malloc(scale_info->output_size * sizeof(int*));
     scale_info->weights = (float **) malloc(scale_info->output_size * sizeof(float*));
     
@@ -756,19 +652,14 @@ void calc_contributions(img_scale_info *scale_info)
     {
         ind_w_ptr_x = 0;
         for (x = 0; x < scale_info->P; x++)
-        {
             if (weights[y][x] != 0.0f)
             {
                 scale_info->indices[y][ind_w_ptr_x] = indices[y][x];
                 scale_info->weights[y][ind_w_ptr_x] = weights[y][x];
                 ind_w_ptr_x = ind_w_ptr_x + 1;
             }
-        }
     }
 
-    printf("scale_info->output_size: %0d\n", scale_info->output_size);
-    printf("scale_info->num_non_zero: %0d\n", scale_info->num_non_zero);
-        
     for (y = 0; y < scale_info->output_size; y++)
     {
         free(indices[y]);
@@ -778,7 +669,8 @@ void calc_contributions(img_scale_info *scale_info)
     free(weights);
     free(indices);
     free(aux);
-    printf("done calc_contributions\n");
+
+    return 0;
 }
 
 void release_scale_info(img_scale_info *scale_info)
@@ -858,38 +750,18 @@ int rotate(ppm_image_handler *handler)
 	else if (angle > 180) angle = angle - 180;
 	else if (angle > 90) angle = 180 - angle;
 
-	//printf("angle: %0.0f\n", angle);
-
 	calc_rot_size(angle, handler->imginfo.width, handler->imginfo.height, &handler->imginfo.new_width, &handler->imginfo.new_height);
 	angle = to_radians(handler->rotate_info.angle);
 	
-	printf("rotate\n");
-    printf("old_height: %0d\n", handler->imginfo.height);
-    printf("old_width: %0d\n", handler->imginfo.width);
-    printf("new_height: %0d\n", handler->imginfo.new_height);
-    printf("new_width: %0d\n", handler->imginfo.new_width);
-
 	x_center_in = floor(handler->imginfo.width / 2);
 	y_center_in = floor(handler->imginfo.height / 2);
 
 	x_offset = floor(handler->imginfo.new_width / 2) - floor(handler->imginfo.width / 2);
 	y_offset = floor(handler->imginfo.new_height / 2) - floor(handler->imginfo.height / 2);
 
-    handler->imginfo.new_buff = (pixel **) malloc(handler->imginfo.new_height * sizeof(pixel *));
-    if (handler->imginfo.new_buff == NULL)
-    {
-        return -1;
-    }
+    if (buffalloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return -1;
 
-    for (y = 0; y < handler->imginfo.new_height; y++)
-    {
-        handler->imginfo.new_buff[y] = (pixel *) malloc(handler->imginfo.new_width * sizeof(pixel));
-        memset(handler->imginfo.new_buff[y], 0x00, handler->imginfo.new_width * sizeof(pixel));
-        if (handler->imginfo.new_buff[y] == NULL)
-        {
-            return -1;
-        }
-    }
+    for (y = 0; y < handler->imginfo.new_height; y++) memset(handler->imginfo.new_buff[y], 0x00, handler->imginfo.new_width * sizeof(pixel));
 
 	for (y = 0; y < handler->imginfo.new_height; y++)
     {
@@ -913,9 +785,6 @@ int rotate(ppm_image_handler *handler)
 
             newX = (cos(angle) * (float) (x0)) + (sin(angle) * (float) (y0));
             newY = -(sin(angle) * (float)(x0)) + (cos(angle) * (float) (y0));
-
-            //nX = round(newX + x_center_in);
-            //nY = round(newY + y_center_in);
 
             nX = (newX + x_center_in);
             nY = (newY + y_center_in);
@@ -978,29 +847,11 @@ int imresize(ppm_image_handler *handler)
     int y;
 
     handler->imginfo.new_height = handler->imginfo.height;
-    printf("new_height: %0d\n", handler->imginfo.new_height);
-	printf("output_size: %0d\n", handler->scale_info.output_size);
     handler->imginfo.new_width = handler->scale_info.output_size;
 
-    handler->imginfo.new_buff = (pixel **) malloc(handler->imginfo.new_height * sizeof(pixel *));
-    if (handler->imginfo.new_buff == NULL)
-    {
-        return -1;
-    }
-
-    for (y = 0; y < handler->imginfo.new_height; y++)
-    {
-        handler->imginfo.new_buff[y] = (pixel *) malloc(handler->imginfo.new_width * sizeof(pixel));
-        if (handler->imginfo.new_buff[y] == NULL)
-        {
-            return -1;
-        }
-    }
+    if (buffalloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return -1;
   
-    printf("imresize\n");
-
     for (y = 0; y < handler->imginfo.height; y++)
-    {
         for (x = 0; x < handler->imginfo.new_width; x++)
         {
             int z;
@@ -1029,7 +880,6 @@ int imresize(ppm_image_handler *handler)
             handler->imginfo.new_buff[y][x].g = (int) sum_g;
             handler->imginfo.new_buff[y][x].b = (int) sum_b;
         }
-    }
     
     return 0;
 }
@@ -1074,31 +924,22 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
     return 0;
 }
 
+int buffalloc(pixel ***new_buff, unsigned int height, unsigned int width)
+{
+    int y;
+    if (((*new_buff) = (pixel **) malloc(height * sizeof(pixel *))) == NULL) return -1;
+
+    for (y = 0; y < height; y++)
+        if (((*new_buff)[y] = (pixel *) malloc(width * sizeof(pixel))) == NULL) return -1;
+
+    return 0;
+}
+
 int mono(ppm_image_handler *handler) // TODO: should return error
 {
     int x;
     int y;
 
-    handler->imginfo.file_type = FILETYPE_PBM;
-    handler->imginfo.new_height = handler->imginfo.height;
-    handler->imginfo.new_width = handler->imginfo.width;
-    printf("height: %0d\n", handler->imginfo.new_height);
-    printf("width: %0d\n", handler->imginfo.new_width);
-
-    handler->imginfo.new_buff = (pixel **) malloc(handler->imginfo.new_height * sizeof(pixel *));
-    if (handler->imginfo.new_buff == NULL)
-    {
-        return -1;
-    }
-
-    for (y = 0; y < handler->imginfo.new_height; y++)
-    {
-        handler->imginfo.new_buff[y] = (pixel *) malloc(handler->imginfo.new_width * sizeof(pixel));
-        if (handler->imginfo.new_buff[y] == NULL) return -1;
-    }
-
-// bayer 4x4  
-// ------------------------------------------------------------------------------------------------------------------------------------------------------
     float matrix[] = {0.1250, 1.0000, 0.1875, 0.8125,
                     0.6250, 0.3750, 0.6875, 0.4375,
                     0.2500, 0.8750, 0.0625, 0.9375,
@@ -1106,6 +947,16 @@ int mono(ppm_image_handler *handler) // TODO: should return error
 
     int k = 4;
 
+    handler->imginfo.file_type = FILETYPE_PBM;
+    handler->imginfo.new_height = handler->imginfo.height;
+    handler->imginfo.new_width = handler->imginfo.width;
+    printf("height: %0d\n", handler->imginfo.new_height);
+    printf("width: %0d\n", handler->imginfo.new_width);
+
+    if (buffalloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return -1;
+
+// bayer 4x4  
+// ------------------------------------------------------------------------------------------------------------------------------------------------------
     for (x = 0; x < k*k; x++)
         matrix[x] = matrix[x] * 255;
 
@@ -1132,14 +983,8 @@ int gray(ppm_image_handler *handler) // TODO: should return error
     handler->imginfo.file_type = FILETYPE_PGM;
     handler->imginfo.new_height = handler->imginfo.height;
     handler->imginfo.new_width = handler->imginfo.width;
-    printf("height: %0d\n", handler->imginfo.new_height);
-    printf("width: %0d\n", handler->imginfo.new_width);
 
-    handler->imginfo.new_buff = (pixel **) malloc(handler->imginfo.new_height * sizeof(pixel *));
-    if (handler->imginfo.new_buff == NULL) return -1;
-
-    for (y = 0; y < handler->imginfo.new_height; y++)
-        if ((handler->imginfo.new_buff[y] = (pixel *) malloc(handler->imginfo.new_width * sizeof(pixel))) == NULL) return -1;
+    if (buffalloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return -1;
 
     for (y = 0; y < handler->imginfo.new_height; y++)
         for (x = 0; x < handler->imginfo.new_width; x++)
@@ -1202,10 +1047,9 @@ int doProcessPPM(ppm_image_handler *handler)
 //    // process image
     if (handler->arg_flag.resize_enable)
     {
-        printf("resizing...");
         init_img_scale_info(handler);
 
-        calc_contributions(&(handler->scale_info));
+        if ((calc_contributions(&(handler->scale_info))) == -1) return -1;
 
         imresize(handler);
         release_scale_info(&(handler->scale_info));
@@ -1213,7 +1057,6 @@ int doProcessPPM(ppm_image_handler *handler)
 
     if (handler->arg_flag.rotate_enable)
     {
-        printf("rotating...");
         if (handler->arg_flag.resize_enable) // TODO: this is ugly
         {
             releaseBuffer(handler);
@@ -1287,77 +1130,3 @@ int doProcessPPM(ppm_image_handler *handler)
     fclose(handler->filep);
     return 0;
 }
-
-
-
-/*
-
-
-            handler->imginfo.buff[y][x].r = (unsigned char)((handler->imginfo.buff[y][x].r + handler->imginfo.buff[y][x].g + handler->imginfo.buff[y][x].b) / 3);
-            //float a_ij = (float) handler->imginfo.new_buff[y][x].r;
-            //float a_
-            unsigned int ury = handler->imginfo.new_height;
-            unsigned int urx = handler->imginfo.new_width;
-            #define alpha 0.4375
-            #define beta 0.1875
-            #define gamma 0.3125
-            #define delta 0.0625
-
-            float d[65] = {0.000,0.060,0.114,0.162,0.205,0.243,0.276,0.306,0.332,0.355,
-                           0.375,0.393,0.408,0.422,0.435,0.446,0.456,0.465,0.474,0.482,
-                           0.490,0.498,0.505,0.512,0.520,0.527,0.535,0.543,0.551,0.559,
-                           0.568,0.577,0.586,0.596,0.605,0.615,0.625,0.635,0.646,0.656,
-                           0.667,0.677,0.688,0.699,0.710,0.720,0.731,0.742,0.753,0.764,
-                           0.775,0.787,0.798,0.810,0.822,0.835,0.849,0.863,0.878,0.894,
-                           0.912,0.931,0.952,0.975,1.000};
-            float dampening = 0.1;
-
-            float err;
-            int l;
-            int p;
-            int levels = 65;
-            p = 2;
-
-            if (y == 0 || y > ury) l = 0;
-            else
-            {
-                // find l so that d[l] is close as possible to a[i][j]
-                if (handler->imginfo.buff[y][x].r < 0) l = 0;
-                else if (handler->imginfo.buff[y][x].r >= 1) l = 64;
-                else
-                {
-                    int lo_l = 0;
-                    int hi_l = 64;
-                    while (hi_l - lo_l > p)
-                    {
-                        int mid_l = (lo_l + hi_l) >> 1;
-                        if (handler->imginfo.buff[y][x].r >= d[mid_l]) lo_l = mid_l;
-                        else hi_l = mid_l;
-
-                        printf("hi_l: %0d lo_l: %0d p: %0d\n", hi_l, lo_l, p);
-                    }
-                    if (handler->imginfo.buff[y][x].r - d[lo_l] <= d[hi_l] - handler->imginfo.buff[y][x].r) l = lo_l;
-                    else l = hi_l;
-                }                            
-            }
-            err = handler->imginfo.buff[y][x].r - d[l];
-            handler->imginfo.buff[y][x].r =  l / p;
-            if (y < ury - 1) handler->imginfo.buff[y+1][x].r += alpha * dampening * err;
-            if (x < urx - 1)
-            {
-                if (y > 0)
-                {
-                    handler->imginfo.buff[y-1][x+1].r += beta * dampening * err;
-                }
-                handler->imginfo.buff[y][x+1].r += gamma * dampening * err;
-                if (y < ury - 1)
-                {
-                    handler->imginfo.buff[y+1][x+1].r += delta * dampening * err;
-                }
-            }
-
-            printf("x: %0d y: %0d %0d p: %0d l: %0d\n", x, y, handler->imginfo.buff[y][x].r, p, l);
-            handler->imginfo.new_buff[y][x].r = handler->imginfo.buff[y][x].r;
-            
-
-*/
