@@ -336,7 +336,6 @@ int putImageToFile(ppm_image_handler *handler)
     }
     else
     {
-        printf("ppm\n");
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
             {
@@ -893,8 +892,6 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
 
     handler->imginfo.new_height = handler->imginfo.height;
     handler->imginfo.new_width = handler->imginfo.width;
-    printf("new_height: %0d\n", handler->imginfo.new_height);
-    printf("new_width: %0d\n", handler->imginfo.new_width);
 
     handler->imginfo.new_buff = handler->imginfo.buff;
 
@@ -950,8 +947,6 @@ int mono(ppm_image_handler *handler) // TODO: should return error
     handler->imginfo.file_type = FILETYPE_PBM;
     handler->imginfo.new_height = handler->imginfo.height;
     handler->imginfo.new_width = handler->imginfo.width;
-    printf("height: %0d\n", handler->imginfo.new_height);
-    printf("width: %0d\n", handler->imginfo.new_width);
 
     if (buffalloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return -1;
 
