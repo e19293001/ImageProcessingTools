@@ -1051,76 +1051,6 @@ int mono(ppm_image_handler *handler) // TODO: should return error
         if (handler->imginfo.new_buff[y] == NULL) return -1;
     }
 
-
-/*
-// ------------------------------------------------------------------------------------------------------------------------------------------------------
-    float matrix[] = { 0,  8,  2, 10,
-                      12,  4, 14,  6,
-                       3, 11,  1,  9,
-                      15,  7, 13,  5 };
-
-    int k = 4;
-
-    for (x = 0; x < k*k; x++)
-        matrix[x] = (matrix[x] / 16) * 255;
-
-    for (y = 0; y < handler->imginfo.new_height; y++)
-    {
-        for (x = 0; x < handler->imginfo.new_width; x++)
-        {
-            unsigned char oldpixel = (handler->imginfo.buff[y][x].r + handler->imginfo.buff[y][x].g + handler->imginfo.buff[y][x].b) / 3;
-            if (oldpixel >= matrix[x%k*k+y%k])
-                handler->imginfo.new_buff[y][x].r = 0;
-            else
-                handler->imginfo.new_buff[y][x].r = 1;
-        }
-    }
-// ------------------------------------------------------------------------------------------------------------------------------------------------------
-*/
-
-/*
-// bayer 8x8 with gamma correction
-// ------------------------------------------------------------------------------------------------------------------------------------------------------
-    float matrix[] = {0.1250, 1.0000, 0.1875, 0.8125,
-                    0.6250, 0.3750, 0.6875, 0.4375,
-                    0.2500, 0.8750, 0.0625, 0.9375,
-                    0.7500, 0.5000, 0.5625, 0.3125};
-
-    int k = 4;
-
-    unsigned char gamma_lut[256];
-    float gamma = 2;
-    float gammaCorrection = 1 / gamma;
-
-
-    for (x = 0; x < 256; x++)
-    {
-        //printf("pow(x / 255, gammaCorrection): %0f\n", pow((float)x / 255, gammaCorrection) * 255);
-        gamma_lut[x] = pow((float)x / 255, gammaCorrection) * 255;
-        //gamma_lut[x] = (float) pow(x / 255, gammaCorrection) * 255;
-    }
-
-    //for (x = 0; x < 256; x++)
-    //    printf("gamma_lut[%03d]: %0f\n", x, gamma_lut[x]);
-
-    for (x = 0; x < k*k; x++)
-        matrix[x] = matrix[x] * 255;
-
-    for (y = 0; y < handler->imginfo.new_height; y++)
-    {
-        for (x = 0; x < handler->imginfo.new_width; x++)
-        {
-            unsigned char oldpixel = (handler->imginfo.buff[y][x].r + handler->imginfo.buff[y][x].g + handler->imginfo.buff[y][x].b) / 3;
-            oldpixel = (unsigned char) gamma_lut[oldpixel];
-            if (oldpixel >= matrix[x%k*k+y%k])
-                handler->imginfo.new_buff[y][x].r = 0;
-            else
-                handler->imginfo.new_buff[y][x].r = 1;
-        }
-    }
-// ------------------------------------------------------------------------------------------------------------------------------------------------------
-*/
-
 // bayer 4x4  
 // ------------------------------------------------------------------------------------------------------------------------------------------------------
     float matrix[] = {0.1250, 1.0000, 0.1875, 0.8125,
@@ -1145,41 +1075,6 @@ int mono(ppm_image_handler *handler) // TODO: should return error
         }
     }
 // ------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-/*
-    float matrix[] = {1, 33,  9, 41, 3,  35, 11, 43, 49, 17, 57, 25, 51, 19, 59, 27, 13, 45, 5, 
-                37, 15, 47, 7, 39, 61, 29, 53, 21, 63, 31, 55, 23, 4, 36, 12, 44, 2, 34, 10, 42, 52,
-                20, 60, 28, 50, 18, 58, 26, 16, 48, 8, 40, 14, 46, 6, 38, 64, 32, 56, 24, 62, 30,
-                54, 22};
-
-    int k = 8;
-//    int matrix[] = {  0, 32,  8, 40,  2, 34, 10, 42,
-//                     48, 16, 56, 24, 50, 18, 58, 26,
-//                     12, 44,  4, 36, 14, 46,  6, 38,
-//                     60, 28, 52, 20, 62, 30, 54, 22,
-//                      3, 35, 11, 43,  1, 33,  9, 41,
-//                     51, 19, 59, 27, 49, 17, 57, 25,
-//                     15, 47,  7, 39, 13, 45,  5, 37,
-//                     63, 31, 55, 23, 61, 29, 53, 21 };
-
-    for (x = 0; x < 64; x++)
-        matrix[x] = matrix[x] * 4 - 1;
-
-    for (y = 0; y < handler->imginfo.new_height; y++)
-    {
-        for (x = 0; x < handler->imginfo.new_width; x++)
-        {
-            unsigned char oldpixel = (handler->imginfo.buff[y][x].r + handler->imginfo.buff[y][x].g + handler->imginfo.buff[y][x].b) / 3;
-            if (oldpixel >= matrix[x%k*k+y%k])
-                handler->imginfo.new_buff[y][x].r = 0;
-            else
-                handler->imginfo.new_buff[y][x].r = 1;
-
-
-        }
-    }
-*/
     return 0;
 }
 
