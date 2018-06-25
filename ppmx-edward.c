@@ -117,8 +117,8 @@ int getNextPixel(ppm_image_handler *handler, pixel *pix);
 int doProcessPPM(ppm_image_handler *handler);
 int getImageInfo(ppm_image_handler *handler);
 int rotateGrayScaleImage(ppm_image_handler *handler); // this can be removed
-void releaseBuffer(ppm_image_handler *handler); // this can be simplified without using handler
-int buffalloc(pixel ***new_buff, unsigned int height, unsigned int width);
+void releaseBuffer(pixel ***new_buff, unsigned int height);
+int image_buff_alloc(pixel ***new_buff, unsigned int height, unsigned int width);
 
 void usage()
 {
@@ -536,13 +536,13 @@ int getImageInfo(ppm_image_handler *handler)
     return 0;
 }
 
-void releaseBuffer(ppm_image_handler *handler)
+void releaseBuffer(pixel ***new_buff, unsigned int height)
 {
     unsigned int y;
-    for (y = 0; y < handler->imginfo.height; y++)
-        free(handler->imginfo.buff[y]);
+    for (y = 0; y < height; y++)
+        free((*new_buff)[y]);
 
-    free(handler->imginfo.buff);
+    free(*new_buff);
 }
 
 float cubic(float x)
@@ -758,7 +758,7 @@ int rotate(ppm_image_handler *handler)
 	x_offset = floor(handler->imginfo.new_width / 2) - floor(handler->imginfo.width / 2);
 	y_offset = floor(handler->imginfo.new_height / 2) - floor(handler->imginfo.height / 2);
 
-    if (buffalloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return -1;
+    if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return -1;
 
     for (y = 0; y < handler->imginfo.new_height; y++) memset(handler->imginfo.new_buff[y], 0x00, handler->imginfo.new_width * sizeof(pixel));
 
@@ -848,7 +848,7 @@ int imresize(ppm_image_handler *handler)
     handler->imginfo.new_height = handler->imginfo.height;
     handler->imginfo.new_width = handler->scale_info.output_size;
 
-    if (buffalloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return -1;
+    if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return -1;
   
     for (y = 0; y < handler->imginfo.height; y++)
         for (x = 0; x < handler->imginfo.new_width; x++)
@@ -921,7 +921,7 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
     return 0;
 }
 
-int buffalloc(pixel ***new_buff, unsigned int height, unsigned int width)
+int image_buff_alloc(pixel ***new_buff, unsigned int height, unsigned int width)
 {
     int y;
     if (((*new_buff) = (pixel **) malloc(height * sizeof(pixel *))) == NULL) return -1;
@@ -948,7 +948,7 @@ int mono(ppm_image_handler *handler) // TODO: should return error
     handler->imginfo.new_height = handler->imginfo.height;
     handler->imginfo.new_width = handler->imginfo.width;
 
-    if (buffalloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return -1;
+    if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return -1;
 
 // bayer 4x4  
 // ------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -979,7 +979,7 @@ int gray(ppm_image_handler *handler) // TODO: should return error
     handler->imginfo.new_height = handler->imginfo.height;
     handler->imginfo.new_width = handler->imginfo.width;
 
-    if (buffalloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return -1;
+    if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return -1;
 
     for (y = 0; y < handler->imginfo.new_height; y++)
         for (x = 0; x < handler->imginfo.new_width; x++)
@@ -1040,6 +1040,7 @@ int doProcessPPM(ppm_image_handler *handler)
 	printf("height: %0d\n", handler->imginfo.height);
 	printf("width: %0d\n", handler->imginfo.width);
 //    // process image
+    printf("resize\n");
     if (handler->arg_flag.resize_enable)
     {
         init_img_scale_info(handler);
@@ -1050,11 +1051,13 @@ int doProcessPPM(ppm_image_handler *handler)
         release_scale_info(&(handler->scale_info));
     }
 
+    printf("rotate\n");
     if (handler->arg_flag.rotate_enable)
     {
         if (handler->arg_flag.resize_enable) // TODO: this is ugly
         {
-            releaseBuffer(handler);
+            releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
+            //releaseBuffer(handler, handler->imginfo.new_height);
             handler->imginfo.buff = handler->imginfo.new_buff;
             handler->imginfo.height = handler->imginfo.new_height;
             handler->imginfo.width = handler->imginfo.new_width;
@@ -1062,11 +1065,13 @@ int doProcessPPM(ppm_image_handler *handler)
         rotate(handler);
     }
 
+    printf("gray\n");
     if (handler->arg_flag.gray_enable)
     {
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) // TODO: this is ugly
         {
-            releaseBuffer(handler);
+            releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
+            //releaseBuffer(handler, handler->imginfo.new_height);
             handler->imginfo.buff = handler->imginfo.new_buff;
             handler->imginfo.height = handler->imginfo.new_height;
             handler->imginfo.width = handler->imginfo.new_width;
@@ -1074,22 +1079,27 @@ int doProcessPPM(ppm_image_handler *handler)
         gray(handler);
     }
         
+    printf("mono\n");
     if (handler->arg_flag.mono_enable)
     {
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) // TODO: this is ugly
         {
-            releaseBuffer(handler);
+            releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
+            //releaseBuffer(handler, handler->imginfo.new_height);
             handler->imginfo.buff = handler->imginfo.new_buff;
             handler->imginfo.height = handler->imginfo.new_height;
             handler->imginfo.width = handler->imginfo.new_width;
         }
         mono(handler);
     }
+
+    printf("flipv\n");
 	if (handler->arg_flag.flipv_enable)
     {
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) // TODO: this is ugly
         {
-            releaseBuffer(handler);
+            releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
+            //releaseBuffer(handler, handler->imginfo.new_height);
             handler->imginfo.buff = handler->imginfo.new_buff;
             handler->imginfo.height = handler->imginfo.new_height;
             handler->imginfo.width = handler->imginfo.new_width;
@@ -1101,7 +1111,8 @@ int doProcessPPM(ppm_image_handler *handler)
     {
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) // TODO: this is ugly
         {
-            releaseBuffer(handler);
+            releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
+            //releaseBuffer(handler, handler->imginfo.new_height);
             handler->imginfo.buff = handler->imginfo.new_buff;
             handler->imginfo.height = handler->imginfo.new_height;
             handler->imginfo.width = handler->imginfo.new_width;
@@ -1118,7 +1129,7 @@ int doProcessPPM(ppm_image_handler *handler)
     }
 
     // buffer is reused for flipv and fliph
-    if (!(handler->arg_flag.flipv_enable || handler->arg_flag.fliph_enable)) releaseBuffer(handler);
+    if (!(handler->arg_flag.flipv_enable || handler->arg_flag.fliph_enable)) releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
 
     // release allocated image buffer
     free(handler->file_buffer);
