@@ -45,16 +45,16 @@
 typedef struct img_scale_info {
     int input_size;
     int output_size;
-    float scale;
+    double scale;
     int kernel_width;
-    float **weights;
+    double **weights;
     int **indices;
     int P;
     int num_non_zero;
 } img_scale_info;
 
 typedef struct img_rotate_info {
-    float angle;
+    double angle;
 } img_rotate_info;
 
 typedef struct pixel {
@@ -106,9 +106,9 @@ typedef struct ppm_image_handler {
 } ppm_image_handler;
 
 //int calc_contributions(img_scale_info *scale_info);
-int calc_contributions(int in_size, int out_size, float scale, float k_width, float ***out_weights, int ***out_indices, int *contrib_size);
+int calc_contributions(int in_size, int out_size, double scale, double k_width, double ***out_weights, int ***out_indices, int *contrib_size);
 int mod(int a, int b);
-float cubic(float x);
+double cubic(double x);
 void init_img_scale_info(ppm_image_handler *handler);
 //void release_scale_info(img_scale_info *scale_info);
 //void release_scale_info(void *weights, int size);
@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
 			else if (argv[x][1] == 'r')
 			{
 				handler.arg_flag.rotate_enable = 1;
-				handler.rotate_info.angle = (float) atoi(&argv[x][2]);
+				handler.rotate_info.angle = (double) atoi(&argv[x][2]);
                 if (handler.rotate_info.angle < 0 || handler.rotate_info.angle >= 360)
                 {
                     printf("invalid option for rotate. it is less than 0 or greater than 359\n");
@@ -556,14 +556,14 @@ void releaseBuffer(pixel ***new_buff, unsigned int height)
     free(*new_buff);
 }
 
-float cubic(float x)
+double cubic(double x)
 {
-    float ret = 0;
-    float absx = fabs(x);
-    float absx2 = absx * absx;
-    float absx3 = absx2 * absx;
+    double ret = 0;
+    double absx = fabs(x);
+    double absx2 = absx * absx;
+    double absx3 = absx2 * absx;
 
-    if (absx < 1) ret = (1.5*absx3) - (2.5*absx2) + 1;
+    if (absx <= 1) ret = (1.5*absx3) - (2.5*absx2) + 1;
 
     if ((1 < absx) && (absx <= 2)) ret = ret + ((-0.5*absx3) + (2.5*absx2) - (4*absx) + 2);
             
@@ -578,16 +578,16 @@ int mod(int a, int b)
 }
 
 //int calc_contributions(handler->imginfo.width, handler->imginfo.new_height, handler->scale_info.scale, handler->scale_info.kernel_width);
-//int calc_contributions(int in_size, int out_size, float scale, float k_width, float *out_weights[][], int ***out_indices, int *contrib_size)
-int calc_contributions(int in_size, int out_size, float scale, float k_width, float ***out_weights, int ***out_indices, int *contrib_size)
+//int calc_contributions(int in_size, int out_size, double scale, double k_width, double *out_weights[][], int ***out_indices, int *contrib_size)
+int calc_contributions(int in_size, int out_size, double scale, double k_width, double ***out_weights, int ***out_indices, int *contrib_size)
 //int calc_contributions(img_scale_info *scale_info)
 {
     int x = 0;
     int y = 0;
     unsigned int aux_size = in_size * 2;
     int *aux;
-    float **indices;
-    float **weights;
+    int **indices;
+    double **weights;
     int P;
     int num_non_zero;
     int ind_w_ptr_x = 0;
@@ -603,8 +603,8 @@ int calc_contributions(int in_size, int out_size, float scale, float k_width, fl
     printf("out_size: %0d\n", out_size);
     printf("scale: %0f\n", scale);
     printf("P: %0d\n", P);
-    indices = (float **) malloc(out_size * sizeof(float*));
-    weights = (float **) malloc(out_size * sizeof(float*));
+    indices = (int **) malloc(out_size * sizeof(int*));
+    weights = (double **) malloc(out_size * sizeof(double*));
     if (indices == NULL || weights == NULL)
     {
         printf("fatal. allocating indices\n");
@@ -613,8 +613,8 @@ int calc_contributions(int in_size, int out_size, float scale, float k_width, fl
 
     for (y = 0; y < out_size; y++)
     {
-        indices[y] = (float *) malloc(P * sizeof(float));
-        weights[y] = (float *) malloc(P * sizeof(float));
+        indices[y] = (int *) malloc(P * sizeof(double));
+        weights[y] = (double *) malloc(P * sizeof(double));
 
         if (indices[y] == NULL || weights[y] == NULL)
         {
@@ -643,7 +643,7 @@ int calc_contributions(int in_size, int out_size, float scale, float k_width, fl
         {
             // generate an array from 1 to output_size
             // divide each element to scale
-            float u = ((y+1) / scale) + (0.5 * (1 - (1 / scale)));
+            double u = ((y+1) / scale) + (0.5 * (1 - (1 / scale)));
             indices[y][x] = floor(u - (k_width / 2)) + (x - 1);
             //printf("%0f ", indices[y][x]);
         }
@@ -652,28 +652,54 @@ int calc_contributions(int in_size, int out_size, float scale, float k_width, fl
     //printf("\n");
 
     // generate weights
+    printf("u->\n");
+    if (scale < 1.0)
+        for (y = 0; y < out_size; y++)
+            for (x = 0; x < P; x++)
+            {
+                double u = ((y+1) / scale) + (0.5 * (1 - (1 / scale)));
+                double t = cubic((u - (double)indices[y][x] - 1) * scale);
+                weights[y][x] = scale * t;
+                //printf("%0e ", weights[y][x]);
+                //printf("[ %0f %0d ] ", u, indices[y][x]);
+            }
+    else
+        for (y = 0; y < out_size; y++)
+            for (x = 0; x < P; x++)
+            {
+                double u = ((y+1) / scale) + (0.5 * (1 - (1 / scale)));
+                weights[y][x] = cubic(u - (double)indices[y][x] - 1);
+                //printf("%0e ", weights[y][x]);
+                //printf("%0f ", u);
+            }
+
+    printf("sizeof(double): %0d\n", sizeof(double));
+    printf("sum weights->\n");
     for (y = 0; y < out_size; y++)
     {
+        double sum = 0.0;
         for (x = 0; x < P; x++)
         {
-            float u = ((y+1) / scale) + (0.5 * (1 - (1 / scale)));
-            weights[y][x] = cubic(u - indices[y][x] - 1);
-            //printf("%0e ", weights[y][x]);
-            //printf("%0f ", u);
+            sum += weights[y][x];
         }
-        //printf("\n");
+        printf("%0.08f ", sum);
+        for (x = 0; x < P; x++)
+        {
+            weights[y][x] = weights[y][x] / sum;
+        }
     }
-    
+    printf("\n");
+
     //printf("after weights\n");
     //for (y = 0; y < out_size; y++)
     //{
     //    for (x = 0; x < P; x++)
     //    {
-    //        printf("%0f ", weights[y][x]);
+    //        printf("%0e ", weights[y][x]);
     //    }
     //    printf("\n");
     //}
-    
+    //
     //printf("after indices\n");
     //for (y =0; y < out_size; y++)
     //{
@@ -687,42 +713,65 @@ int calc_contributions(int in_size, int out_size, float scale, float k_width, fl
             indices[y][x] = aux[mod(((int) indices[y][x]),aux_size)];
 
     
+//    num_non_zero = 0;
+//    for (x = 0; x < P; x++)
+//    {
+//        if (weights[0][x] != 0.0f)
+//        {
+//            //printf("%0f\n", weights[0][x]);
+//            num_non_zero = num_non_zero + 1;
+//        }
+//    }
     num_non_zero = 0;
-    for (x = 0; x < P; x++)
+    for (y = 0; y < out_size; y++)
     {
-        if (weights[0][x] != 0.0f)
+        int num_non_zero_t = 0;
+        for (x = 0; x < P; x++)
         {
-            //printf("%0f\n", weights[0][x]);
-            num_non_zero = num_non_zero + 1;
+            if (weights[y][x] != 0.0f)
+            {
+                //printf("%0f\n", weights[0][x]);
+                num_non_zero_t = num_non_zero_t + 1;
+            }
         }
+        if (num_non_zero < num_non_zero_t)
+            num_non_zero = num_non_zero_t;
     }
+    printf("num_non_zero: %0d\n", num_non_zero);
+
 
     unsigned char *ind2store;
 
     ind2store = (unsigned char*) malloc(P * sizeof(unsigned char*));
 
+    printf("ind2store:\n");
     for (x = 0; x < P; x++)
     {
-        if (weights[0][x] != 0.0f)
-        {
-            //printf("%0d ", x);
-            ind2store[x] = 1;
-        }
-        else
-        {
-            ind2store[x] = 0;
-        }
+        ind2store[x] = 0;
     }
-    //printf("\n");
+
+    for (y = 0; y < out_size; y++)
+    {
+        for (x = 0; x < P; x++)
+        {
+            if (weights[y][x] != 0.0f)
+            {
+                printf("%0d ", x);
+                ind2store[x] = 1;
+            }
+        }
+        printf("\n");
+    }
+    printf("\n");
 
     //printf("num_non_zero: %0d\n", num_non_zero);
     (*out_indices) = (int **) malloc(out_size * sizeof(int*));
-    (*out_weights) = (float **) malloc(out_size * sizeof(float*));
+    (*out_weights) = (double **) malloc(out_size * sizeof(double*));
     
     for (y = 0; y < out_size; y++)
     {
         (*out_indices)[y] = (int *) malloc(num_non_zero * sizeof(int));
-        (*out_weights)[y] = (float *) malloc(num_non_zero * sizeof(float));
+        (*out_weights)[y] = (double *) malloc(num_non_zero * sizeof(double));
     }
 
     for (y = 0; y < out_size; y++)
@@ -755,6 +804,8 @@ int calc_contributions(int in_size, int out_size, float scale, float k_width, fl
     //}
     //
     //printf("generating indices...\n");
+    printf("- out_size: %0d\n", out_size);
+    printf("- num_non_zero: %0d\n", num_non_zero);
     //for (y = 0; y < out_size; y++)
     //{
     //    for (x = 0; x < num_non_zero; x++)
@@ -767,6 +818,7 @@ int calc_contributions(int in_size, int out_size, float scale, float k_width, fl
     //}
     
     *contrib_size = num_non_zero; // TODO: num_non_zero can be removed
+    printf("*contrib_size: %0d\n", *contrib_size);
     for (y = 0; y < out_size; y++)
     {
         free(indices[y]);
@@ -792,17 +844,17 @@ void release_scale_info(void ***weights, int size)
     free(*weights);
 }
 
-float getScaleFromSize(int in_size, int out_size)
+double getScaleFromSize(int in_size, int out_size)
 {
-    //printf("in_size: %0d out_size: %0d scale: %0f\n", in_size, out_size, ((float) out_size) / in_size);
-    return ((float) out_size) / in_size;
+    //printf("in_size: %0d out_size: %0d scale: %0f\n", in_size, out_size, ((double) out_size) / in_size);
+    return ((double) out_size) / in_size;
 }
 
 // TODO: can be removed
-int getSizeFromScale(int in_size, float scale)
+int getSizeFromScale(int in_size, double scale)
 {
     //printf("in_size: %0d scale: %0.0f\n", in_size, scale);
-    return (int) ((float)scale * in_size);
+    return (int) ((double)scale * in_size);
 }
 
 void init_img_scale_info(ppm_image_handler *handler)
@@ -822,26 +874,26 @@ void init_img_scale_info(ppm_image_handler *handler)
     printf("new_height: %0d\n", handler->imginfo.new_height);
 }
 
-float to_radians(float degrees) {
+double to_radians(double degrees) {
 	return (degrees * M_PI)/180.0;
 }
 
-float to_degrees(float radians) {
+double to_degrees(double radians) {
     return (radians * 180.0) / M_PI;
 }
 
-void calc_rot_size(float angle,
+void calc_rot_size(double angle,
 				   unsigned int old_width, unsigned int old_height,
 				   unsigned int *new_width, unsigned int *new_height)
 {
-    float theta1; // TODO: minimize lines here
+    double theta1; // TODO: minimize lines here
 
-    float a;
-    float b;
-    float c;
-    float d;
-    float e;
-    float f;
+    double a;
+    double b;
+    double c;
+    double d;
+    double e;
+    double f;
 	theta1 = to_radians(angle);
 	d = old_height;
 	c = old_width;
@@ -861,7 +913,7 @@ int rotate(ppm_image_handler *handler)
     int x_center_in;
     int y_center_in;
 
-	float angle;
+	double angle;
 
 	int x_offset;
 	int y_offset;
@@ -889,33 +941,33 @@ int rotate(ppm_image_handler *handler)
     {
         for (x = 0; x < handler->imginfo.new_width; x++)
         {
-            float newX;
-            float newY;
+            double newX; // TODO: make this smaller
+            double newY;
 			int xx;
 			int yy;
 
             int x0;
             int y0;
 
-            float nX;
-            float nY;
+            double nX;
+            double nY;
 
 			xx = x - x_offset;
 			yy = y - y_offset;
 			x0 = xx - x_center_in;
 			y0 = yy - y_center_in;
 
-            newX = (cos(angle) * (float) (x0)) + (sin(angle) * (float) (y0));
-            newY = -(sin(angle) * (float)(x0)) + (cos(angle) * (float) (y0));
+            newX = (cos(angle) * (double) (x0)) + (sin(angle) * (double) (y0));
+            newY = -(sin(angle) * (double)(x0)) + (cos(angle) * (double) (y0));
 
             nX = (newX + x_center_in);
             nY = (newY + y_center_in);
 
 			if ((nX < handler->imginfo.width) && (nY < handler->imginfo.height) && (nY >= 0) && (nX >= 0))
             {
-                float q_r = 0.0f;
-                float q_g = 0.0f;
-                float q_b = 0.0f;
+                double q_r = 0.0f;
+                double q_g = 0.0f;
+                double q_b = 0.0f;
                 int j;
                 int i;
 
@@ -924,9 +976,9 @@ int rotate(ppm_image_handler *handler)
                     for (j = 0; j < 4; j++) 
                     {
                         int v = floor(nY) - 1 + j;
-                        float p_r = 0.0f;
-                        float p_g = 0.0f;
-                        float p_b = 0.0f;
+                        double p_r = 0.0f;
+                        double p_g = 0.0f;
+                        double p_b = 0.0f;
                         for (i = 0; i < 4; i++)
                         {
                             int u = floor(nX) - 1 + i;
@@ -963,7 +1015,7 @@ int rotate(ppm_image_handler *handler)
     return 0;
 }
         
-int imresize(ppm_image_handler *handler, int out_size, int dim, float **weights, int **indices, int weights_sz)
+int imresize(ppm_image_handler *handler, int out_size, int dim, double **weights, int **indices, int weights_sz)
 {
     int x;
     int y;
@@ -996,9 +1048,9 @@ int imresize(ppm_image_handler *handler, int out_size, int dim, float **weights,
             for (x = 0; x < handler->imginfo.new_width; x++)
             {
                 int z;
-                float sum_r = 0.0f;
-                float sum_g = 0.0f;
-                float sum_b = 0.0f;
+                double sum_r = 0.0f;
+                double sum_g = 0.0f;
+                double sum_b = 0.0f;
 
                 for (z = 0; z < weights_sz; z++)
                 {
@@ -1009,10 +1061,13 @@ int imresize(ppm_image_handler *handler, int out_size, int dim, float **weights,
                     //printf("weights[y][z]: %0f\n", weights[y][z]);
                     //printf("  width: %0d height: %0d ", handler->imginfo.width, handler->imginfo.height);
                     //printf("handler->imginfo.buff[index][x].r: 0x%03x\n", handler->imginfo.buff[index][x]);
-                    sum_r = sum_r + handler->imginfo.buff[index][x].r * weights[y][z];
-                    sum_g = sum_g + handler->imginfo.buff[index][x].g * weights[y][z];
-                    sum_b = sum_b + handler->imginfo.buff[index][x].b * weights[y][z];
+                    sum_r = sum_r + (handler->imginfo.buff[index][x].r * weights[y][z]);
+                    sum_g = sum_g + (handler->imginfo.buff[index][x].g * weights[y][z]);
+                    sum_b = sum_b + (handler->imginfo.buff[index][x].b * weights[y][z]);
                 }
+                sum_r = round(sum_r);
+                sum_g = round(sum_g);
+                sum_b = round(sum_b);
 
                 if (sum_r < 0.0f) sum_r = 0.0f;
                 if (sum_g < 0.0f) sum_g = 0.0f;
@@ -1058,9 +1113,9 @@ int imresize(ppm_image_handler *handler, int out_size, int dim, float **weights,
             for (x = 0; x < handler->imginfo.new_width; x++)
             {
                 int z;
-                float sum_r = 0.0f;
-                float sum_g = 0.0f;
-                float sum_b = 0.0f;
+                double sum_r = 0.0f;
+                double sum_g = 0.0f;
+                double sum_b = 0.0f;
 
                 for (z = 0; z < weights_sz; z++)
                 {
@@ -1073,6 +1128,10 @@ int imresize(ppm_image_handler *handler, int out_size, int dim, float **weights,
                     sum_g = sum_g + handler->imginfo.buff[y][index].g * weights[x][z];
                     sum_b = sum_b + handler->imginfo.buff[y][index].b * weights[x][z];
                 }
+
+                sum_r = round(sum_r);
+                sum_g = round(sum_g);
+                sum_b = round(sum_b);
 
                 if (sum_r < 0.0f) sum_r = 0.0f;
                 if (sum_g < 0.0f) sum_g = 0.0f;
@@ -1147,7 +1206,7 @@ int mono(ppm_image_handler *handler) // TODO: should return error
     int x;
     int y;
 
-    float matrix[] = {0.1250, 1.0000, 0.1875, 0.8125,
+    double matrix[] = {0.1250, 1.0000, 0.1875, 0.8125,
                     0.6250, 0.3750, 0.6875, 0.4375,
                     0.2500, 0.8750, 0.0625, 0.9375,
                     0.7500, 0.5000, 0.5625, 0.3125};
@@ -1256,28 +1315,20 @@ int doProcessPPM(ppm_image_handler *handler)
         printf("resize\n");
         init_img_scale_info(handler);
 
-        float **weights[2];
+        double **weights[2];
         int **indices[2];
         int weights_sz[2];
         int im_sz[2];
-        float scale[2];
-        int order[2];
+        double scale[2];
+        int order[2] = {0,0};
 
         scale[0] = getScaleFromSize(handler->imginfo.height, handler->imginfo.new_height);
         scale[1] = getScaleFromSize(handler->imginfo.width, handler->imginfo.new_width);
 
         printf("scale[0]: %0f\n", scale[0]);
         printf("scale[1]: %0f\n", scale[1]);
-        if (scale[0] < scale[1])
-        {
-            order[0] = 0;
-            order[1] = 1;
-        }
-        else
-        {
-            order[0] = 1;
-            order[1] = 0;
-        }
+
+        (scale[0] < scale[1]) ? order[1] = 1 : order[0] = 1;
 
         calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &weights[0], &indices[0], &weights_sz[0]);
         calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &weights[1], &indices[1], &weights_sz[1]);
@@ -1307,7 +1358,7 @@ int doProcessPPM(ppm_image_handler *handler)
         //    printf("\n");
         //}
 
-//        int calc_contributions(int in_size, int out_size, float scale, float k_width, float ***out_weights, float ***out_indices, int *contrib_size)
+//        int calc_contributions(int in_size, int out_size, double scale, double k_width, double ***out_weights, double ***out_indices, int *contrib_size)
 //        calc_contributions(&(handler->scale_info2[0]));
 //        calc_contributions(handler->imginfo.width, handler->imginfo.new_width, 
           
@@ -1317,9 +1368,47 @@ int doProcessPPM(ppm_image_handler *handler)
 //
 //        //imresize(handler);
         //imresize(handler, 0);
+
+        int xx;
+        printf("weights:\n");
+        for (xx = 0; xx < 2; xx++)
+        {
+            //printf(" weights_sz[%0d]: %0d ", xx, weights_sz[xx]);
+            printf("--- %0d\n", xx);
+            for (y = 0; y < im_sz[xx]; y++)
+            {
+                //printf(" >> xx: %0d y: %0d\n", xx, y);
+                //printf(" -- im_sz[%0d]: %0d\n", y, im_sz[xx]);
+                for (x = 0; x < weights_sz[xx]; x++)
+                {
+                    //printf("im_sz[%0d]: %0d weights_sz[%0d]: %0d xx: %0d y: %0d x: %0d --\n", xx, im_sz[xx], x, weights_sz[xx], xx, y, x);
+                    //printf("weights[%0d][%0d]: %0f ", y, x, weights[xx][y][x]);
+                    printf("%0.8e ", weights[xx][y][x]);
+                }
+                printf("\n");
+            }
+        }
+        printf("\n");
+
+        printf("indices:\n");
+        for (xx = 0; xx < 2; xx++)
+        {
+            printf("--- %0d\n", xx);
+            for (y = 0; y < im_sz[xx]; y++)
+            {
+                for (x = 0; x < weights_sz[xx]; x++)
+                {
+                    //printf("%0d ", indices[y][x]);
+                    printf("%0d ", indices[xx][y][x]);
+                }
+                printf("\n");
+            }
+        }
+
         int out_width = handler->imginfo.new_width;
         printf("--- for height\n");
-        imresize(handler, im_sz[0], 0, weights[0], indices[0], weights_sz[0]);
+        int dim = order[0];
+        imresize(handler, im_sz[dim], dim, weights[dim], indices[dim], weights_sz[dim]);
         releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
         handler->imginfo.buff = handler->imginfo.new_buff;
         //printf("before\n");
@@ -1331,6 +1420,7 @@ int doProcessPPM(ppm_image_handler *handler)
         printf("new_width: %0d\n", handler->imginfo.new_width);
         handler->imginfo.height = handler->imginfo.new_height;
         handler->imginfo.width = handler->imginfo.new_width;
+        
         //printf("--- for width\n");
         //printf("indices[1]\n");
         //printf("new_width: %0d\n", handler->imginfo.new_width);
@@ -1342,7 +1432,8 @@ int doProcessPPM(ppm_image_handler *handler)
         //    }
         //    printf("\n");
         //}
-        imresize(handler, im_sz[1], 1, weights[1], indices[1], weights_sz[1]);
+        dim = order[1];
+        imresize(handler, im_sz[dim], dim, weights[dim], indices[dim], weights_sz[dim]);
         printf("all done\n");
 //        
 
@@ -1357,10 +1448,10 @@ int doProcessPPM(ppm_image_handler *handler)
             free(indices[x]);
         }
 
-//        release_scale_info((float ***)&weights[0], handler->imginfo.new_width);
+//        release_scale_info((double ***)&weights[0], handler->imginfo.new_width);
 //        release_scale_info((int ***)&indices[0], handler->imginfo.new_width);
 //
-//        release_scale_info((float ***)&weights[1], handler->imginfo.new_height);
+//        release_scale_info((double ***)&weights[1], handler->imginfo.new_height);
 //        release_scale_info((int ***)&indices[1], handler->imginfo.new_height);
     }
 
