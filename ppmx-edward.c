@@ -150,23 +150,15 @@ int main(int argc, char *argv[])
 	handler.filename = NULL;
 
 	for (x = 1; x < argc; x++)
-	{
-		if (argv[x][0] == '-') {
-			if (argv[x][1] == 'f') {
-				if (argv[x][2] == 'h')
-				{
-                    handler.arg_flag.fliph_enable = 1;
-				}
-				else if (argv[x][2] == 'v')
-				{
-                    handler.arg_flag.flipv_enable = 1;
-				}
+		if (argv[x][0] == '-')
+			if (argv[x][1] == 'f')
+				if (argv[x][2] == 'h') handler.arg_flag.fliph_enable = 1;
+				else if (argv[x][2] == 'v') handler.arg_flag.flipv_enable = 1;
 				else
 				{
 					printf("invalid option for flip.\nallowed options are -fh -fv only.\n");
 					exit(0);
 				}
-			}
 			else if (argv[x][1] == 'w')
 			{
 				handler.arg_flag.resize_enable = 1;
@@ -195,12 +187,7 @@ int main(int argc, char *argv[])
                 usage();
                 exit(0);
             }
-		}
-		else
-		{
-			handler.filename = &argv[x][0];
-		}
-	}
+		else handler.filename = &argv[x][0];
 	if (handler.filename == NULL)
 	{
 		usage();
@@ -301,7 +288,6 @@ int putImageToFile(ppm_image_handler *handler)
     }
 
     if (handler->imginfo.file_type == FILETYPE_PGM)
-    {
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
             {
@@ -311,7 +297,6 @@ int putImageToFile(ppm_image_handler *handler)
                     return -1;
                 }
             }
-    }
     else if (handler->imginfo.file_type == FILETYPE_PBM)
     {
         unsigned char tmp = 0;
@@ -343,7 +328,6 @@ int putImageToFile(ppm_image_handler *handler)
         }
     }
     else
-    {
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
             {
@@ -363,7 +347,6 @@ int putImageToFile(ppm_image_handler *handler)
                     return -1;
                 }
             }
-    }
 
     for (y = 0; y < handler->imginfo.new_height; y++)
         free(handler->imginfo.new_buff[y]);
@@ -437,12 +420,11 @@ int getNextToken(ppm_image_handler *handler, token *current_token)
             handler->tkn.data[index++] = handler->tkn.current_char;
             getNextChar(handler);
         } while (isalnum(handler->tkn.current_char));
+
         handler->tkn.data[index] = '\0';
 
-        if ((strncmp(handler->tkn.data, "P6", DATA_BUFLEN)) == 0)
-        {
-            handler->tkn.kind = PPM_MAGIC_NUM;
-        }
+        if ((strncmp(handler->tkn.data, "P6", DATA_BUFLEN)) == 0) handler->tkn.kind = PPM_MAGIC_NUM;
+
         getNextChar(handler);
     }
     else return -1; // return error for anything else
@@ -574,10 +556,7 @@ int mod(int a, int b)
     return r < 0 ? r + b : r;
 }
 
-//int calc_contributions(handler->imginfo.width, handler->imginfo.new_height, handler->scale_info.scale, handler->scale_info.kernel_width);
-//int calc_contributions(int in_size, int out_size, double scale, double k_width, double *out_weights[][], int ***out_indices, int *contrib_size)
 int calc_contributions(int in_size, int out_size, double scale, double k_width, double ***out_weights, int ***out_indices, int *contrib_size)
-//int calc_contributions(img_scale_info *scale_info)
 {
     int x = 0;
     int y = 0;
@@ -585,18 +564,18 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
     int *aux;
     int **indices;
     double **weights;
-    int P;
-    int num_non_zero;
+    int P = 0;
+    int num_non_zero = 0;
     int ind_w_ptr_x = 0;
+    unsigned char *ind2store;
 
-    if (scale < 1.0)
-    {
-        k_width = k_width / scale;
-    }
+    if (scale < 1.0) k_width = k_width / scale;
+
     P = (int) ceil(k_width) + 2;
 
     indices = (int **) malloc(out_size * sizeof(int*));
     weights = (double **) malloc(out_size * sizeof(double*));
+
     if (indices == NULL || weights == NULL)
     {
         printf("fatal. allocating indices\n");
@@ -620,9 +599,10 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
         printf("fatal. allocating memory for aux\n");
         return - 1;
     }            
+
     memset(aux, 0, aux_size);
-    y = 0;
-    for (x = 0; x < in_size; x++)
+
+    for (x = 0, y = 0; x < in_size; x++)
         aux[y++] = x;
 
     for (x = in_size-1; x >= 0; x--)
@@ -630,7 +610,6 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
 
     // generate indices
     for (y = 0; y < out_size; y++)
-    {
         for (x = 0; x < P; x++)
         {
             // generate an array from 1 to output_size
@@ -638,7 +617,6 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
             double u = ((y+1) / scale) + (0.5 * (1 - (1 / scale)));
             indices[y][x] = floor(u - (k_width / 2)) + (x - 1);
         }
-    }
 
     // generate weights
     if (scale < 1.0)
@@ -660,45 +638,37 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
     for (y = 0; y < out_size; y++)
     {
         double sum = 0.0;
-        for (x = 0; x < P; x++)
-        {
-            sum += weights[y][x];
-        }
-        for (x = 0; x < P; x++)
-        {
-            weights[y][x] = weights[y][x] / sum;
-        }
+        for (x = 0; x < P; x++) sum += weights[y][x];
+        for (x = 0; x < P; x++) weights[y][x] = weights[y][x] / sum;
     }
 
     for (y = 0; y < out_size; y++)
         for (x = 0; x < P; x++)
             indices[y][x] = aux[mod(((int) indices[y][x]),aux_size)];
 
-    num_non_zero = 0;
     for (y = 0; y < out_size; y++)
     {
         int num_non_zero_t = 0;
         for (x = 0; x < P; x++)
-        {
             if (weights[y][x] != 0.0f)
             {
                 num_non_zero_t = num_non_zero_t + 1;
             }
-        }
-        if (num_non_zero < num_non_zero_t)
-            num_non_zero = num_non_zero_t;
+        if (num_non_zero < num_non_zero_t) num_non_zero = num_non_zero_t;
     }
-
-    unsigned char *ind2store;
 
     ind2store = (unsigned char*) malloc(P * sizeof(unsigned char*));
 
-    for (x = 0; x < P; x++)
-        ind2store[x] = 0;
+    for (x = 0; x < P; x++) ind2store[x] = 0;
 
     for (y = 0; y < out_size; y++)
         for (x = 0; x < P; x++)
-            if (weights[y][x] != 0.0f) ind2store[x] = 1;
+        {
+            if (weights[y][x] != 0.0f)
+            {
+                ind2store[x] = 1;
+            }
+        }
 
     (*out_indices) = (int **) malloc(out_size * sizeof(int*));
     (*out_weights) = (double **) malloc(out_size * sizeof(double*));
@@ -920,11 +890,11 @@ int imresize(ppm_image_handler *handler, int out_size, int dim, double **weights
 {
     int x;
     int y;
+    int z;
     
     if (dim == 0) // scale height
     {
         handler->imginfo.new_height = out_size;
-        //handler->imginfo.height = out_size;
         handler->imginfo.new_width = handler->imginfo.width;
 
         if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.width) == -1) return -1;
@@ -932,30 +902,23 @@ int imresize(ppm_image_handler *handler, int out_size, int dim, double **weights
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
             {
-                int z;
                 double sum_r = 0.0f;
                 double sum_g = 0.0f;
                 double sum_b = 0.0f;
 
                 for (z = 0; z < weights_sz; z++)
                 {
-                    int index = indices[y][z];
-
-                    sum_r = sum_r + (handler->imginfo.buff[index][x].r * weights[y][z]);
-                    sum_g = sum_g + (handler->imginfo.buff[index][x].g * weights[y][z]);
-                    sum_b = sum_b + (handler->imginfo.buff[index][x].b * weights[y][z]);
+                    sum_r = sum_r + (handler->imginfo.buff[indices[y][z]][x].r * weights[y][z]);
+                    sum_g = sum_g + (handler->imginfo.buff[indices[y][z]][x].g * weights[y][z]);
+                    sum_b = sum_b + (handler->imginfo.buff[indices[y][z]][x].b * weights[y][z]);
                 }
+                sum_r = round(sum_r);
+                sum_g = round(sum_g);
+                sum_b = round(sum_b);
 
-                if (sum_r < 0.0f) sum_r = 0.0f;
-                if (sum_r >= 256) sum_r = 255.0f;
-                if (sum_g < 0.0f) sum_g = 0.0f;
-                if (sum_g >= 256) sum_g = 255.0f;
-                if (sum_b < 0.0f) sum_b = 0.0f;
-                if (sum_b >= 256) sum_b = 255.0f;
-
-                handler->imginfo.new_buff[y][x].r = (int) round(sum_r);
-                handler->imginfo.new_buff[y][x].g = (int) round(sum_g);
-                handler->imginfo.new_buff[y][x].b = (int) round(sum_b);
+                handler->imginfo.new_buff[y][x].r = (sum_r < 0.0f) ? 0.0f : (sum_r >= 256) ? 255.0f : (int) sum_r;
+                handler->imginfo.new_buff[y][x].g = (sum_g < 0.0f) ? 0.0f : (sum_g >= 256) ? 255.0f : (int) sum_g;
+                handler->imginfo.new_buff[y][x].b = (sum_b < 0.0f) ? 0.0f : (sum_b >= 256) ? 255.0f : (int) sum_b;
             }
     }
     else
@@ -968,29 +931,24 @@ int imresize(ppm_image_handler *handler, int out_size, int dim, double **weights
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
             {
-                int z;
                 double sum_r = 0.0f;
                 double sum_g = 0.0f;
                 double sum_b = 0.0f;
 
                 for (z = 0; z < weights_sz; z++)
                 {
-                    int index = indices[x][z];
-                    sum_r = sum_r + handler->imginfo.buff[y][index].r * weights[x][z];
-                    sum_g = sum_g + handler->imginfo.buff[y][index].g * weights[x][z];
-                    sum_b = sum_b + handler->imginfo.buff[y][index].b * weights[x][z];
+                    sum_r = sum_r + handler->imginfo.buff[y][indices[x][z]].r * weights[x][z];
+                    sum_g = sum_g + handler->imginfo.buff[y][indices[x][z]].g * weights[x][z];
+                    sum_b = sum_b + handler->imginfo.buff[y][indices[x][z]].b * weights[x][z];
                 }
 
-                if (sum_r < 0.0f) sum_r = 0.0f;
-                if (sum_r >= 256) sum_r = 255.0f;
-                if (sum_g < 0.0f) sum_g = 0.0f;
-                if (sum_g >= 256) sum_g = 255.0f;
-                if (sum_b < 0.0f) sum_b = 0.0f;
-                if (sum_b >= 256) sum_b = 255.0f;
+                sum_r = round(sum_r);
+                sum_g = round(sum_g);
+                sum_b = round(sum_b);
 
-                handler->imginfo.new_buff[y][x].r = (int) round(sum_r);
-                handler->imginfo.new_buff[y][x].g = (int) round(sum_g);
-                handler->imginfo.new_buff[y][x].b = (int) round(sum_b);
+                handler->imginfo.new_buff[y][x].r = (sum_r < 0.0f) ? 0.0f : (sum_r >= 256) ? 255.0f : (int) sum_r;
+                handler->imginfo.new_buff[y][x].g = (sum_g < 0.0f) ? 0.0f : (sum_g >= 256) ? 255.0f : (int) sum_g;
+                handler->imginfo.new_buff[y][x].b = (sum_b < 0.0f) ? 0.0f : (sum_b >= 256) ? 255.0f : (int) sum_b;
             }
     }
     
@@ -1003,6 +961,7 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
 {
     int x;
     int y;
+    pixel tmp;
 
     handler->imginfo.new_height = handler->imginfo.height;
     handler->imginfo.new_width = handler->imginfo.width;
@@ -1017,7 +976,7 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
         for (y = 0; y < handler->imginfo.new_height/2; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
             {
-                pixel tmp = handler->imginfo.new_buff[y][x];
+                tmp = handler->imginfo.new_buff[y][x];
                 handler->imginfo.new_buff[y][x] = handler->imginfo.new_buff[((handler->imginfo.new_height)-1) - y][x];
                 handler->imginfo.new_buff[((handler->imginfo.new_height)-1) - y][x] = tmp;
             }
@@ -1027,7 +986,7 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width/2; x++)
             {
-                pixel tmp = handler->imginfo.new_buff[y][x];
+                tmp = handler->imginfo.new_buff[y][x];
                 handler->imginfo.new_buff[y][x] = handler->imginfo.new_buff[y][((handler->imginfo.new_width)-1)-x];
                 handler->imginfo.new_buff[y][((handler->imginfo.new_width)-1) - x] = tmp;
             }
@@ -1038,6 +997,7 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
 int image_buff_alloc(pixel ***new_buff, unsigned int height, unsigned int width)
 {
     int y;
+
     if (((*new_buff) = (pixel **) malloc(height * sizeof(pixel *))) == NULL) return -1;
 
     for (y = 0; y < height; y++)
@@ -1051,12 +1011,7 @@ int mono(ppm_image_handler *handler) // TODO: should return error
     int x;
     int y;
 
-    double matrix[] = {0.1250, 1.0000, 0.1875, 0.8125,
-                    0.6250, 0.3750, 0.6875, 0.4375,
-                    0.2500, 0.8750, 0.0625, 0.9375,
-                    0.7500, 0.5000, 0.5625, 0.3125};
-
-    int k = 4;
+    double matrix[] = {0.1250, 1.0000, 0.1875, 0.8125, 0.6250, 0.3750, 0.6875, 0.4375, 0.2500, 0.8750, 0.0625, 0.9375, 0.7500, 0.5000, 0.5625, 0.3125};
 
     handler->imginfo.file_type = FILETYPE_PBM;
     handler->imginfo.new_height = handler->imginfo.height;
@@ -1066,15 +1021,12 @@ int mono(ppm_image_handler *handler) // TODO: should return error
 
 // bayer 4x4  
 // ------------------------------------------------------------------------------------------------------------------------------------------------------
-    for (x = 0; x < k*k; x++)
-        matrix[x] = matrix[x] * 255;
-
     for (y = 0; y < handler->imginfo.new_height; y++)
     {
         for (x = 0; x < handler->imginfo.new_width; x++)
         {
             unsigned char oldpixel = (handler->imginfo.buff[y][x].r + handler->imginfo.buff[y][x].g + handler->imginfo.buff[y][x].b) / 3;
-            if (oldpixel >= matrix[x%k*k+y%k])
+            if (oldpixel >= matrix[(x % 4) * 4 + (y % 4)] * 255)
                 handler->imginfo.new_buff[y][x].r = 0;
             else
                 handler->imginfo.new_buff[y][x].r = 1;
@@ -1151,10 +1103,8 @@ int doProcessPPM(ppm_image_handler *handler)
         return -1;
     }
   
-	printf("width: %0d\n", handler->imginfo.width);
-	printf("height: %0d\n", handler->imginfo.height);
     handler->imginfo.new_buff = NULL;
-    // process image
+
     if (handler->arg_flag.resize_enable)
     {
         printf("resize\n");
@@ -1165,13 +1115,21 @@ int doProcessPPM(ppm_image_handler *handler)
         int weights_sz[2];
         int im_sz[2];
         double scale[2];
-        int order[2] = {0,0};
+        int order[2];
 
         scale[0] = getScaleFromSize(handler->imginfo.height, handler->imginfo.new_height);
         scale[1] = getScaleFromSize(handler->imginfo.width, handler->imginfo.new_width);
 
-        if (scale[0] < scale[1]) order[1] = 1;
-        else order[0] = 1;
+        if (scale[0] < scale[1])
+        {
+            order[0] = 0;
+            order[1] = 1;
+        }
+        else
+        {
+            order[0] = 1;
+            order[1] = 0;
+        }
 
         calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &weights[0], &indices[0], &weights_sz[0]);
         calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &weights[1], &indices[1], &weights_sz[1]);
@@ -1188,7 +1146,6 @@ int doProcessPPM(ppm_image_handler *handler)
         handler->imginfo.new_width = out_width;
         handler->imginfo.height = handler->imginfo.new_height;
         handler->imginfo.width = handler->imginfo.new_width;
-        
         dim = order[1];
         imresize(handler, im_sz[dim], dim, weights[dim], indices[dim], weights_sz[dim]);
 
@@ -1210,7 +1167,6 @@ int doProcessPPM(ppm_image_handler *handler)
         if (handler->arg_flag.resize_enable) // TODO: this is ugly
         {
             releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
-            //releaseBuffer(handler, handler->imginfo.new_height);
             handler->imginfo.buff = handler->imginfo.new_buff;
             handler->imginfo.height = handler->imginfo.new_height;
             handler->imginfo.width = handler->imginfo.new_width;
@@ -1224,7 +1180,6 @@ int doProcessPPM(ppm_image_handler *handler)
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) // TODO: this is ugly
         {
             releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
-            //releaseBuffer(handler, handler->imginfo.new_height);
             handler->imginfo.buff = handler->imginfo.new_buff;
             handler->imginfo.height = handler->imginfo.new_height;
             handler->imginfo.width = handler->imginfo.new_width;
@@ -1238,7 +1193,6 @@ int doProcessPPM(ppm_image_handler *handler)
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) // TODO: this is ugly
         {
             releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
-            //releaseBuffer(handler, handler->imginfo.new_height);
             handler->imginfo.buff = handler->imginfo.new_buff;
             handler->imginfo.height = handler->imginfo.new_height;
             handler->imginfo.width = handler->imginfo.new_width;
@@ -1252,7 +1206,6 @@ int doProcessPPM(ppm_image_handler *handler)
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) // TODO: this is ugly
         {
             releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
-            //releaseBuffer(handler, handler->imginfo.new_height);
             handler->imginfo.buff = handler->imginfo.new_buff;
             handler->imginfo.height = handler->imginfo.new_height;
             handler->imginfo.width = handler->imginfo.new_width;
@@ -1266,7 +1219,6 @@ int doProcessPPM(ppm_image_handler *handler)
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) // TODO: this is ugly
         {
             releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
-            //releaseBuffer(handler, handler->imginfo.new_height);
             handler->imginfo.buff = handler->imginfo.new_buff;
             handler->imginfo.height = handler->imginfo.new_height;
             handler->imginfo.width = handler->imginfo.new_width;
@@ -1280,16 +1232,11 @@ int doProcessPPM(ppm_image_handler *handler)
         free(handler->file_buffer);
         fclose(handler->filep);
         releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
-        //printf("error in writing file\n");
         return -1;
     }
 
     // buffer is reused for flipv and fliph
-    if (!(handler->arg_flag.flipv_enable || handler->arg_flag.fliph_enable))
-    {
-        printf("releasing -----\n");
-        releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
-    }
+    if (!(handler->arg_flag.flipv_enable || handler->arg_flag.fliph_enable)) releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
 
     // release allocated image buffer
     free(handler->file_buffer);
