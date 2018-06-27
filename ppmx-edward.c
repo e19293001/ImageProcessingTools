@@ -777,8 +777,8 @@ void calc_rot_size(double angle,
 	a = c * cos(theta1);
 	f = d * sin(theta1);
 	e = d * cos(theta1);
-	*new_width = floor(a + f);
-	*new_height = floor(b + e);
+	*new_width = round(a + f);
+	*new_height = round(b + e);
 }	
 
 int rotate(ppm_image_handler *handler)
@@ -812,6 +812,15 @@ int rotate(ppm_image_handler *handler)
 
     for (y = 0; y < handler->imginfo.new_height; y++) memset(handler->imginfo.new_buff[y], 0x00, handler->imginfo.new_width * sizeof(pixel));
 
+    printf("width: %0d\n", handler->imginfo.width);
+    printf("height: %0d\n", handler->imginfo.height);
+    printf("new_width: %0d\n", handler->imginfo.new_width);
+    printf("new_height: %0d\n", handler->imginfo.new_height);
+
+    handler->imginfo.new_buff[handler->imginfo.new_height-1][handler->imginfo.new_width-1].r = 0xFF;
+    handler->imginfo.new_buff[handler->imginfo.new_height-1][handler->imginfo.new_width-1].g = 0x00;
+    handler->imginfo.new_buff[handler->imginfo.new_height-1][handler->imginfo.new_width-1].b = 0x00;
+
 	for (y = 0; y < handler->imginfo.new_height; y++)
     {
         for (x = 0; x < handler->imginfo.new_width; x++)
@@ -835,10 +844,10 @@ int rotate(ppm_image_handler *handler)
             newX = (cos(angle) * (double) (x0)) + (sin(angle) * (double) (y0));
             newY = -(sin(angle) * (double)(x0)) + (cos(angle) * (double) (y0));
 
-            nX = (newX + x_center_in);
-            nY = (newY + y_center_in);
+            nX = round(newX + x_center_in);
+            nY = round(newY + y_center_in);
 
-			if ((nX < handler->imginfo.width) && (nY < handler->imginfo.height) && (nY >= 0) && (nX >= 0))
+			if (((ceil(nX) < handler->imginfo.width) && (ceil(nY) < handler->imginfo.height) && (nY >= 0) && (nX >= 0)))
             {
                 double q_r = 0.0f;
                 double q_g = 0.0f;
@@ -846,17 +855,17 @@ int rotate(ppm_image_handler *handler)
                 int j;
                 int i;
 
-                if (nX > 1 && nY > 1 && nX < handler->imginfo.width - 3 && nY < handler->imginfo.height - 3)
+                if (nX > 1 && nY > 1 && nX < handler->imginfo.width - 2 && nY < handler->imginfo.height - 2)
                 {
                     for (j = 0; j < 4; j++) 
                     {
-                        int v = floor(nY) - 1 + j;
+                        int v = ceil(nY) - 1 + j;
                         double p_r = 0.0f;
                         double p_g = 0.0f;
                         double p_b = 0.0f;
                         for (i = 0; i < 4; i++)
                         {
-                            int u = floor(nX) - 1 + i;
+                            int u = ceil(nX) - 1 + i;
                             p_r += (handler->imginfo.buff[v][u].r * cubic(nX - u));
                             p_g += (handler->imginfo.buff[v][u].g * cubic(nX - u));
                             p_b += (handler->imginfo.buff[v][u].b * cubic(nX - u));
@@ -875,13 +884,13 @@ int rotate(ppm_image_handler *handler)
                     if (q_g >= 256) q_g = 255.0f;
                     if (q_b >= 256) q_b = 255.0f;
 
-                    handler->imginfo.new_buff[yy+y_offset][xx+x_offset].r = (int) q_r;
-                    handler->imginfo.new_buff[yy+y_offset][xx+x_offset].g = (int) q_g;
-                    handler->imginfo.new_buff[yy+y_offset][xx+x_offset].b = (int) q_b;
+                    handler->imginfo.new_buff[y][x].r = (int) q_r;
+                    handler->imginfo.new_buff[y][x].g = (int) q_g;
+                    handler->imginfo.new_buff[y][x].b = (int) q_b;
                 }
                 else
                 {
-                    handler->imginfo.new_buff[yy+y_offset][xx+x_offset] = handler->imginfo.buff[(int)nY][(int)nX];
+                    handler->imginfo.new_buff[y][x] = handler->imginfo.buff[(int)nY][(int)nX];
                 }
             }
         }
