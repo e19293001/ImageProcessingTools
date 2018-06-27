@@ -109,7 +109,7 @@ typedef struct ppm_image_handler {
 int calc_contributions(int in_size, int out_size, double scale, double k_width, double ***out_weights, int ***out_indices, int *contrib_size);
 int mod(int a, int b);
 double cubic(double x);
-void init_img_scale_info(ppm_image_handler *handler);
+int init_img_scale_info(ppm_image_handler *handler);
 //void release_scale_info(img_scale_info *scale_info);
 //void release_scale_info(void *weights, int size);
 void release_scale_info(void ***weights, int size);
@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
 				else if (argv[x][2] == 'v') handler.arg_flag.flipv_enable = 1;
 				else
 				{
-					printf("invalid option for flip.\nallowed options are -fh -fv only.\n");
+					printf("Error: invalid option for flip.\nallowed options are -fh -fv only.\n");
 					exit(0);
 				}
 			else if (argv[x][1] == 'w')
@@ -170,13 +170,13 @@ int main(int argc, char *argv[])
 				handler.rotate_info.angle = (double) atoi(&argv[x][2]);
                 if (handler.rotate_info.angle < 0 || handler.rotate_info.angle >= 360)
                 {
-                    printf("invalid option for rotate. it is less than 0 or greater than 359\n");
+                    printf("Error: invalid option for rotate. it is less than 0 or greater than 359\n");
                     exit(0);
                 }
                 
 				if (handler.rotate_info.angle == 0)
 				{
-					printf("invalid option of rotate.\nallowed option is -r<degrees>.\n");
+					printf("Error: invalid option of rotate.\nallowed option is -r<degrees>.\n");
 					exit(0);
 				}
 			}
@@ -184,6 +184,7 @@ int main(int argc, char *argv[])
 			else if (strcmp(&argv[x][1], "mono") == 0) handler.arg_flag.mono_enable = 1;
             else
             {
+                printf("Error: invalid option: %s\n", &argv[x][1]);
                 usage();
                 exit(0);
             }
@@ -214,13 +215,13 @@ int putImageToFile(ppm_image_handler *handler)
 
     if (handler->imginfo.new_buff == NULL)
     {
-        printf("no data to write\n");
+        printf("Error: no data to write\n");
         return -1;
     }
 
     if ((fofp = fopen(fileout, "wb")) == NULL)
     {
-        printf("unable to open file for writing: %s\n", fileout);
+        printf("Error: unable to open file for writing: %s\n", fileout);
         return -1;
     }
 
@@ -229,7 +230,7 @@ int putImageToFile(ppm_image_handler *handler)
         error = fwrite("P5\n", 1, 3, fofp);
         if (error != 3)
         {
-            printf("failed in writing to %s\n", fileout);
+            printf("Error: failed in writing to %s\n", fileout);
             return -1;
         }
     }
@@ -238,7 +239,7 @@ int putImageToFile(ppm_image_handler *handler)
         error = fwrite("P4\n", 1, 3, fofp);
         if (error != 3)
         {
-            printf("failed in writing to %s\n", fileout);
+            printf("Error: failed in writing to %s\n", fileout);
             return -1;
         }
     }
@@ -247,7 +248,7 @@ int putImageToFile(ppm_image_handler *handler)
         error = fwrite("P6\n", 1, 3, fofp);
         if (error != 3)
         {
-            printf("failed in writing to %s\n", fileout);
+            printf("Error: failed in writing to %s\n", fileout);
             return -1;
         }
     }
@@ -256,7 +257,7 @@ int putImageToFile(ppm_image_handler *handler)
     error = fwrite(fileout, 1, strlen(fileout), fofp);
     if (error != strlen(fileout))
     {
-        printf("failed in writing to %s\n", fileout);
+        printf("Error: failed in writing to %s\n", fileout);
         return -1;
     }
 
@@ -264,7 +265,7 @@ int putImageToFile(ppm_image_handler *handler)
     error = fwrite(fileout, 1, strlen(fileout), fofp);
     if (error != strlen(fileout))
     {
-        printf("failed in writing to %s\n", fileout);
+        printf("Error: failed in writing to %s\n", fileout);
         return -1;
     }
 
@@ -272,7 +273,7 @@ int putImageToFile(ppm_image_handler *handler)
     error = fwrite(fileout, 1, strlen(fileout), fofp);
     if (error != strlen(fileout))
     {
-        printf("failed in writing to %s\n", fileout);
+        printf("Error: failed in writing to %s\n", fileout);
         return -1;
     }
 
@@ -282,7 +283,7 @@ int putImageToFile(ppm_image_handler *handler)
         error = fwrite(fileout, 1, strlen(fileout), fofp);
         if (error != strlen(fileout))
         {
-            printf("failed in writing to %s\n", fileout);
+            printf("Error: failed in writing to %s\n", fileout);
             return -1;
         }
     }
@@ -293,7 +294,7 @@ int putImageToFile(ppm_image_handler *handler)
             {
                 if ((error = fwrite(&handler->imginfo.new_buff[y][x].r,1, 1, fofp)) != 1)
                 {
-                    printf("failed in writing to %s\n", fileout);
+                    printf("Error: failed in writing to %s\n", fileout);
                     return -1;
                 }
             }
@@ -310,7 +311,7 @@ int putImageToFile(ppm_image_handler *handler)
                 {
                     if ((error = fwrite(&z,1, 1, fofp)) != 1)
                     {
-                        printf("failed in writing to %s\n", fileout);
+                        printf("Error: failed in writing to %s\n", fileout);
                         return -1;
                     }
                     tmp = 0;
@@ -318,13 +319,11 @@ int putImageToFile(ppm_image_handler *handler)
                 }
             }
             if (tmp-1 != 0)
-            {
                 if ((error = fwrite(&z,1, 1, fofp)) != 1)
                 {
-                    printf("failed in writing to %s\n", fileout);
+                    printf("Error: failed in writing to %s\n", fileout);
                     return -1;
                 }
-            }
         }
     }
     else
@@ -333,17 +332,17 @@ int putImageToFile(ppm_image_handler *handler)
             {
                 if ((error = fwrite(&handler->imginfo.new_buff[y][x].r,1, 1, fofp)) != 1)
                 {
-                    printf("failed in writing to %s\n", fileout);
+                    printf("Error: failed in writing to %s\n", fileout);
                     return -1;
                 }
                 if ((error = fwrite(&handler->imginfo.new_buff[y][x].g,1, 1, fofp)) != 1)
                 {
-                    printf("failed in writing to %s\n", fileout);
+                    printf("Error: failed in writing to %s\n", fileout);
                     return -1;
                 }
                 if ((error = fwrite(&handler->imginfo.new_buff[y][x].b,1, 1, fofp)) != 1)
                 {
-                    printf("failed in writing to %s\n", fileout);
+                    printf("Error: failed in writing to %s\n", fileout);
                     return -1;
                 }
             }
@@ -364,7 +363,7 @@ int getNextPixel(ppm_image_handler *handler, pixel *pix)
 
     if (handler->index_buffer > handler->filesize)
     {
-        printf("error. unexpected end of file. file index: %0d exceeds file size: %0d\n", handler->index_buffer, handler->filesize);
+        printf("Error: unexpected end of file. file index: %0d exceeds file size: %0d\n", handler->index_buffer, handler->filesize);
         return -1;
     }
     ret.r = handler->file_buffer[handler->index_buffer++];
@@ -439,10 +438,9 @@ int getImageInfo(ppm_image_handler *handler)
     token current_token;
     unsigned int x;
     unsigned int y;
-    int error = 0;
 
     // retrieve the magic number
-    if ((error = getNextToken(handler, &current_token)) != 0)
+    if (getNextToken(handler, &current_token) != 0)
     {
         printf("error in getting next token. wrong format.\n");
         return -1;
@@ -455,7 +453,7 @@ int getImageInfo(ppm_image_handler *handler)
     handler->imginfo.file_type = FILETYPE_PPM;
 
     // retrieve the width
-    if ((error = getNextToken(handler, &current_token)) != 0)
+    if (getNextToken(handler, &current_token) != 0)
     {
         printf("error in getting next token. wrong format.\n");
         return -1;
@@ -468,7 +466,7 @@ int getImageInfo(ppm_image_handler *handler)
     handler->imginfo.width = atoi(current_token.data);
 
     // retrieve the height
-    if ((error = getNextToken(handler, &current_token)) != 0)
+    if (getNextToken(handler, &current_token) != 0)
     {
         printf("error in getting next token. wrong format.\n");
         return -1;
@@ -481,7 +479,7 @@ int getImageInfo(ppm_image_handler *handler)
     handler->imginfo.height = atoi(current_token.data);
 
     // retrieve the maximum color
-    if ((error = getNextToken(handler, &current_token)) != 0)
+    if (getNextToken(handler, &current_token) != 0)
     {
         printf("error in getting next token. wrong format.\n");
         return -1;
@@ -510,9 +508,7 @@ int getImageInfo(ppm_image_handler *handler)
             return -1;
         }
         for (x = 0; x < handler->imginfo.width; x++)
-        {
             if (getNextPixel(handler, &handler->imginfo.buff[y][x]) != 0) return -1;
-        }
     }
     handler->imginfo.new_width = 0;
     handler->imginfo.new_height = 0;
@@ -573,14 +569,23 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
 
     P = (int) ceil(k_width) + 2;
 
-    indices = (int **) malloc(out_size * sizeof(int*));
-    weights = (double **) malloc(out_size * sizeof(double*));
-
-    if (indices == NULL || weights == NULL)
+    if ((indices = (int **) malloc(out_size * sizeof(int*))) == NULL)
     {
-        printf("fatal. allocating indices\n");
-        return - 1;
-     }
+        printf("error. allocating indices\n");
+        return -1;
+    }
+
+    if ((weights = (double **) malloc(out_size * sizeof(double*))) == NULL)
+    {
+        printf("error. allocating indices\n");
+        return -1;
+    }
+
+    //if (indices == NULL || weights == NULL)
+    //{
+    //    printf("error. allocating indices\n");
+    //    return - 1;
+    //}
 
     for (y = 0; y < out_size; y++)
     {
@@ -663,12 +668,7 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
 
     for (y = 0; y < out_size; y++)
         for (x = 0; x < P; x++)
-        {
-            if (weights[y][x] != 0.0f)
-            {
-                ind2store[x] = 1;
-            }
-        }
+            if (weights[y][x] != 0.0f) ind2store[x] = 1;
 
     (*out_indices) = (int **) malloc(out_size * sizeof(int*));
     (*out_weights) = (double **) malloc(out_size * sizeof(double*));
@@ -730,19 +730,23 @@ int getSizeFromScale(int in_size, double scale)
     return (int) ((double)scale * in_size);
 }
 
-void init_img_scale_info(ppm_image_handler *handler)
+int init_img_scale_info(ppm_image_handler *handler)
 {
     // width
     handler->scale_info.kernel_width = 4.0;
     handler->scale_info.P = handler->scale_info.kernel_width + 2;
     handler->scale_info.input_size = handler->imginfo.width;
-    handler->imginfo.new_width = handler->scale_info.output_size;
-    //handler->imginfo.new_height = handler->imginfo.height;
-    //handler->scale_info.output_size = handler->imginfo.width / 2; // need to set from command line argument
+    if ((int) (handler->imginfo.new_width = handler->scale_info.output_size) < 1)
+    {
+        printf("invalid option for width: %0d\n", handler->imginfo.new_width);
+        return -1;
+    }
     handler->scale_info.scale = getScaleFromSize(handler->scale_info.input_size, handler->scale_info.output_size);
 
     // height
     handler->imginfo.new_height = getSizeFromScale(handler->imginfo.height, handler->scale_info.scale);
+
+    return 0;
 }
 
 double to_radians(double degrees) {
@@ -773,8 +777,8 @@ void calc_rot_size(double angle,
 	a = c * cos(theta1);
 	f = d * sin(theta1);
 	e = d * cos(theta1);
-	*new_width = round(a + f);
-	*new_height = round(b + e);
+	*new_width = floor(a + f);
+	*new_height = floor(b + e);
 }	
 
 int rotate(ppm_image_handler *handler)
@@ -968,11 +972,7 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
 
     handler->imginfo.new_buff = handler->imginfo.buff;
 
-    handler->imginfo.new_buff[0][0].r = 0xff;
-    handler->imginfo.new_buff[0][0].g = 0;
-    handler->imginfo.new_buff[0][0].b = 0;
     if (flip_direction) // flip vertical
-    {
         for (y = 0; y < handler->imginfo.new_height/2; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
             {
@@ -980,9 +980,7 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
                 handler->imginfo.new_buff[y][x] = handler->imginfo.new_buff[((handler->imginfo.new_height)-1) - y][x];
                 handler->imginfo.new_buff[((handler->imginfo.new_height)-1) - y][x] = tmp;
             }
-    }
     else
-    {
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width/2; x++)
             {
@@ -990,7 +988,6 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
                 handler->imginfo.new_buff[y][x] = handler->imginfo.new_buff[y][((handler->imginfo.new_width)-1)-x];
                 handler->imginfo.new_buff[y][((handler->imginfo.new_width)-1) - x] = tmp;
             }
-    }
     return 0;
 }
 
@@ -1107,15 +1104,19 @@ int doProcessPPM(ppm_image_handler *handler)
 
     if (handler->arg_flag.resize_enable)
     {
-        printf("resize\n");
-        init_img_scale_info(handler);
-
         double **weights[2];
         int **indices[2];
         int weights_sz[2];
         int im_sz[2];
         double scale[2];
         int order[2];
+
+        printf("resize\n");
+
+        if (init_img_scale_info(handler) == -1)
+        {
+            return -1;
+        }
 
         scale[0] = getScaleFromSize(handler->imginfo.height, handler->imginfo.new_height);
         scale[1] = getScaleFromSize(handler->imginfo.width, handler->imginfo.new_width);
@@ -1131,8 +1132,8 @@ int doProcessPPM(ppm_image_handler *handler)
             order[1] = 0;
         }
 
-        calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &weights[0], &indices[0], &weights_sz[0]);
-        calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &weights[1], &indices[1], &weights_sz[1]);
+        if (calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &weights[0], &indices[0], &weights_sz[0]) == -1) return -1;
+        if (calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &weights[1], &indices[1], &weights_sz[1]) == -1) return -1;
 
         im_sz[0] = handler->imginfo.new_height;
         im_sz[1] = handler->imginfo.new_width;
