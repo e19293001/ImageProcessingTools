@@ -847,7 +847,8 @@ int rotate(ppm_image_handler *handler)
                 int j;
                 int i;
 
-                if (round(nX) > 1 && round(nY) > 1 && round(nX) < handler->imginfo.width - 3 && round(nY) < handler->imginfo.height - 3)
+                // no interpolation on the edges
+                if (round(nX) > 1 && round(nY) > 1 && round(nX) < handler->imginfo.width - 2 && round(nY) < handler->imginfo.height - 2)
                 {
                     for (j = 0; j < 4; j++) 
                     {
