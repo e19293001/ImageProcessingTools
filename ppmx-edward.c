@@ -776,10 +776,7 @@ int rotate(ppm_image_handler *handler)
     {
         for (x = 0; x < handler->imginfo.new_width; x++)
         {
-            double newX; // TODO: make this smaller
-            double newY;
-
-			int xx;
+			int xx; // TODO: make this smaller
 			int yy;
 
             int x0;
@@ -793,11 +790,8 @@ int rotate(ppm_image_handler *handler)
 			x0 = xx - x_center_in;
 			y0 = yy - y_center_in;
 
-            newX = (cos(angle) * (double) (x0)) + (sin(angle) * (double) (y0));
-            newY = -(sin(angle) * (double)(x0)) + (cos(angle) * (double) (y0));
-
-            nX = (newX + x_center_in);
-            nY = (newY + y_center_in);
+            nX = ((cos(angle) * (double) (x0)) + (sin(angle) * (double) (y0)) + x_center_in);
+            nY = (-(sin(angle) * (double)(x0)) + (cos(angle) * (double) (y0)) + y_center_in);
 
 			if ((round(nX) < handler->imginfo.width) && (round(nY) < handler->imginfo.height) && (round(nY) >= 0) && (round(nX) >= 0))
             {
@@ -927,7 +921,6 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
 {
     int x;
     int y;
-    pixel tmp;
 
     handler->imginfo.new_height = handler->imginfo.height;
     handler->imginfo.new_width = handler->imginfo.width;
@@ -938,7 +931,7 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
         for (y = 0; y < handler->imginfo.new_height/2; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
             {
-                tmp = handler->imginfo.new_buff[y][x];
+                pixel tmp = handler->imginfo.new_buff[y][x];
                 handler->imginfo.new_buff[y][x] = handler->imginfo.new_buff[((handler->imginfo.new_height)-1) - y][x];
                 handler->imginfo.new_buff[((handler->imginfo.new_height)-1) - y][x] = tmp;
             }
@@ -946,7 +939,7 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width/2; x++)
             {
-                tmp = handler->imginfo.new_buff[y][x];
+                pixel tmp = handler->imginfo.new_buff[y][x];
                 handler->imginfo.new_buff[y][x] = handler->imginfo.new_buff[y][((handler->imginfo.new_width)-1)-x];
                 handler->imginfo.new_buff[y][((handler->imginfo.new_width)-1) - x] = tmp;
             }
