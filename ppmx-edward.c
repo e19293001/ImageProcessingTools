@@ -11,30 +11,14 @@
 #define M_PI 3.14159265358979323846
 #define DATA_BUFLEN 10
 #define MAX_HEADER_CHARS 128
-
-#define PPM_MAGIC_NUM 0
-#define PPM_UNSIGNED 1
+#define PPM_ERROR -1
 #define PPM_NOERROR 0
-#define PPM_ERROR -2
+#define PPM_UNSIGNED 1
+#define PPM_MAGIC_NUM 2
 
 #define FILETYPE_PPM 0
 #define FILETYPE_PGM 1
 #define FILETYPE_PBM 2
-
-typedef struct img_scale_info {
-    int input_size;
-    int output_size;
-    double scale;
-    int kernel_width;
-    double **weights;
-    int **indices;
-    int P;
-    int num_non_zero;
-} img_scale_info;
-
-typedef struct img_rotate_info {
-    double angle;
-} img_rotate_info;
 
 typedef struct pixel {
     unsigned char r;
@@ -74,28 +58,25 @@ typedef struct token{
 typedef struct ppm_image_handler {
     img_info imginfo;
     args_flag arg_flag;
-    img_scale_info scale_info;
     FILE *filep;
     unsigned char* file_buffer;
     char *filename;
     unsigned int filesize;
     unsigned int index_buffer;
     token tkn;
-    img_rotate_info rotate_info;
+	unsigned int output_width_size;
+	double angle;
+    char norotate;
 } ppm_image_handler;
 
-//int calc_contributions(img_scale_info *scale_info);
 int calc_contributions(int in_size, int out_size, double scale, double k_width, double ***out_weights, int ***out_indices, int *contrib_size);
 int mod(int a, int b);
 double cubic(double x);
-int init_img_scale_info(ppm_image_handler *handler);
-void release_scale_info(void ***weights, int size);
 int getNextToken(ppm_image_handler *handler, token *current_token);
 void getNextChar(ppm_image_handler *handler);
 int getNextPixel(ppm_image_handler *handler, pixel *pix);
 int doProcessPPM(ppm_image_handler *handler);
 int getImageInfo(ppm_image_handler *handler);
-int rotateGrayScaleImage(ppm_image_handler *handler); // this can be removed
 void releaseBuffer(pixel ***new_buff, unsigned int height);
 int image_buff_alloc(pixel ***new_buff, unsigned int height, unsigned int width);
 void calc_rot_size(double angle,
@@ -104,6 +85,7 @@ void calc_rot_size(double angle,
 double round(double val);
 int putImageToFile(ppm_image_handler *handler);
 void usage();
+void renewBuffer(ppm_image_handler *handler);
 
 int main(int argc, char *argv[])
 {
@@ -120,28 +102,22 @@ int main(int argc, char *argv[])
 				else
 				{
 					printf("Error: invalid option for flip.\nallowed options are -fh -fv only.\n");
-					exit(0);
+					return PPM_ERROR;
 				}
 			else if (argv[x][1] == 'w')
 			{
 				handler.arg_flag.resize_enable = 1;
-				handler.scale_info.output_size = (int) atoi(&argv[x][2]);
+				handler.output_width_size = (int) atoi(&argv[x][2]);
 			}
 			else if (argv[x][1] == 'r')
 			{
 				handler.arg_flag.rotate_enable = 1;
-				handler.rotate_info.angle = (double) atoi(&argv[x][2]);
-                if (handler.rotate_info.angle < 0 || handler.rotate_info.angle >= 360)
+				handler.angle = (double) atoi(&argv[x][2]);
+                if (handler.angle < 0 || handler.angle >= 360)
                 {
-                    printf("Error: invalid option for rotate. it is less than 0 or greater than 359\n");
-                    exit(0);
+                    printf("Error: invalid option for rotate: %0f. it is less than 0 or greater than 359\n", handler.angle);
+                    return PPM_ERROR;
                 }
-                
-				if (handler.rotate_info.angle == 0)
-				{
-					printf("Error: invalid option of rotate.\nallowed option is -r<degrees>.\n");
-					exit(0);
-				}
 			}
             else if (strcmp(&argv[x][1], "gray") == 0) handler.arg_flag.gray_enable = 1;
 			else if (strcmp(&argv[x][1], "mono") == 0) handler.arg_flag.mono_enable = 1;
@@ -149,7 +125,7 @@ int main(int argc, char *argv[])
             {
                 printf("Error: invalid option: %s\n", &argv[x][1]);
                 usage();
-                exit(0);
+                return PPM_ERROR;
             }
 		else handler.filename = &argv[x][0];
 	if (handler.filename == NULL)
@@ -179,7 +155,6 @@ void usage()
 	printf("        -mono Convert to bilevel (.pbm) format\n");
 	printf("        -gray  Convert to grayscale (.pgm) format\n");
 }
-
 
 // write output image to file
 int putImageToFile(ppm_image_handler *handler)
@@ -410,7 +385,7 @@ int getImageInfo(ppm_image_handler *handler)
     unsigned int y;
 
     // retrieve the magic number
-    if (getNextToken(handler, &current_token) != 0)
+    if (getNextToken(handler, &current_token) != PPM_NOERROR)
     {
         printf("error in getting next token. wrong format.\n");
         return PPM_ERROR;
@@ -423,7 +398,7 @@ int getImageInfo(ppm_image_handler *handler)
     handler->imginfo.file_type = FILETYPE_PPM;
 
     // retrieve the width
-    if (getNextToken(handler, &current_token) != 0)
+    if (getNextToken(handler, &current_token) != PPM_NOERROR)
     {
         printf("error in getting next token. wrong format.\n");
         return PPM_ERROR;
@@ -436,7 +411,7 @@ int getImageInfo(ppm_image_handler *handler)
     handler->imginfo.width = atoi(current_token.data);
 
     // retrieve the height
-    if (getNextToken(handler, &current_token) != 0)
+    if (getNextToken(handler, &current_token) != PPM_NOERROR)
     {
         printf("error in getting next token. wrong format.\n");
         return PPM_ERROR;
@@ -449,7 +424,7 @@ int getImageInfo(ppm_image_handler *handler)
     handler->imginfo.height = atoi(current_token.data);
 
     // retrieve the maximum color
-    if (getNextToken(handler, &current_token) != 0)
+    if (getNextToken(handler, &current_token) != PPM_NOERROR)
     {
         printf("error in getting next token. wrong format.\n");
         return PPM_ERROR;
@@ -551,12 +526,6 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
         return PPM_ERROR;
     }
 
-    //if (indices == NULL || weights == NULL)
-    //{
-    //    printf("error. allocating indices\n");
-    //    return - 1;
-    //}
-
     for (y = 0; y < out_size; y++)
     {
         indices[y] = (int *) malloc(P * sizeof(double));
@@ -614,7 +583,7 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
     {
         double sum = 0.0;
         for (x = 0; x < P; x++) sum += weights[y][x];
-        for (x = 0; x < P; x++) weights[y][x] = weights[y][x] / sum;
+        for (x = 0; x < P; x++) weights[y][x] /= sum;
     }
 
     for (y = 0; y < out_size; y++)
@@ -632,7 +601,11 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
         if (num_non_zero < num_non_zero_t) num_non_zero = num_non_zero_t;
     }
 
-    ind2store = (unsigned char*) malloc(P * sizeof(unsigned char*));
+    if ((ind2store = (unsigned char*) malloc(P * sizeof(unsigned char*))) == NULL)
+	{
+		printf("error: allocating ind2store\n");
+		return PPM_ERROR;
+	}
 
     for (x = 0; x < P; x++) ind2store[x] = 0;
 
@@ -640,13 +613,29 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
         for (x = 0; x < P; x++)
             if (weights[y][x] != 0.0f) ind2store[x] = 1;
 
-    (*out_indices) = (int **) malloc(out_size * sizeof(int*));
-    (*out_weights) = (double **) malloc(out_size * sizeof(double*));
+	if (((*out_indices) = (int **) malloc(out_size * sizeof(int*))) == NULL)
+	{
+		printf("error: allocating out_indices\n");
+		return PPM_ERROR;
+	}
+    if (((*out_weights) = (double **) malloc(out_size * sizeof(double*))) == NULL)
+	{
+		printf("error: allocating out_weights\n");
+		return PPM_ERROR;
+	}
     
     for (y = 0; y < out_size; y++)
     {
-        (*out_indices)[y] = (int *) malloc(num_non_zero * sizeof(int));
-        (*out_weights)[y] = (double *) malloc(num_non_zero * sizeof(double));
+        if (((*out_indices)[y] = (int *) malloc(num_non_zero * sizeof(int))) == NULL)
+		{
+			printf("error: allocating out_indices\n");
+			return PPM_ERROR;
+		}
+        if (((*out_weights)[y] = (double *) malloc(num_non_zero * sizeof(double))) == NULL)
+		{
+			printf("error: allocating out_weights\n");
+			return PPM_ERROR;
+		}
     }
 
     for (y = 0; y < out_size; y++)
@@ -679,44 +668,6 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
     return PPM_NOERROR;
 }
 
-void release_scale_info(void ***weights, int size)
-{
-    int y = 0;
-    for (y = 0; y < size; y++)
-    {
-        free((*weights)[y]);
-    }
-    free(*weights);
-}
-
-int init_img_scale_info(ppm_image_handler *handler)
-{
-    // width
-    handler->scale_info.kernel_width = 4.0;
-    handler->scale_info.P = handler->scale_info.kernel_width + 2;
-    handler->scale_info.input_size = handler->imginfo.width;
-    //printf("handler->scale_info.output_size: %0d\n", (handler->imginfo.new_width = handler->scale_info.output_size));
-    if ((int) (handler->imginfo.new_width = handler->scale_info.output_size) < 1)
-    {
-        printf("invalid option for width: %0d\n", handler->imginfo.new_width);
-        return PPM_ERROR;
-    }
-    handler->scale_info.scale = (double) handler->scale_info.output_size / handler->scale_info.input_size;
-
-    // height
-    handler->imginfo.new_height =  handler->imginfo.height * handler->scale_info.scale;
-
-    return PPM_NOERROR;
-}
-
-double to_radians(double degrees) {
-	return (degrees * M_PI)/180.0;
-}
-
-double to_degrees(double radians) {
-    return (radians * 180.0) / M_PI;
-}
-
 void calc_rot_size(double angle,
 				   unsigned int old_width, unsigned int old_height,
 				   unsigned int *new_width, unsigned int *new_height)
@@ -729,7 +680,7 @@ void calc_rot_size(double angle,
     double d;
     double e;
     double f;
-	theta1 = to_radians(angle);
+    theta1 = (angle * M_PI)/180.0; // // convert to radians
 	d = old_height;
 	c = old_width;
 
@@ -753,14 +704,14 @@ int rotate(ppm_image_handler *handler)
 	int x_offset;
 	int y_offset;
 
-	angle = handler->rotate_info.angle;
+	angle = handler->angle;
 
 	if (angle >= 270) angle = 360 - angle;
 	else if (angle > 180) angle = angle - 180;
 	else if (angle > 90) angle = 180 - angle;
 
 	calc_rot_size(angle, handler->imginfo.width, handler->imginfo.height, &handler->imginfo.new_width, &handler->imginfo.new_height);
-	angle = to_radians(handler->rotate_info.angle);
+    angle = (handler->angle * M_PI) / 180.0; // convert to radians
 	
 	x_center_in = floor(handler->imginfo.width / 2);
 	y_center_in = floor(handler->imginfo.height / 2);
@@ -768,79 +719,95 @@ int rotate(ppm_image_handler *handler)
 	x_offset = floor(handler->imginfo.new_width / 2) - floor(handler->imginfo.width / 2);
 	y_offset = floor(handler->imginfo.new_height / 2) - floor(handler->imginfo.height / 2);
 
-    if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return PPM_ERROR;
-
-    for (y = 0; y < handler->imginfo.new_height; y++) memset(handler->imginfo.new_buff[y], 0x00, handler->imginfo.new_width * sizeof(pixel));
-
-	for (y = 0; y < handler->imginfo.new_height; y++)
+	// 0 degree rotation: no rotation, just copy the buffer
+    if (angle == 0)
     {
-        for (x = 0; x < handler->imginfo.new_width; x++)
-        {
-			int xx; // TODO: make this smaller
-			int yy;
+        handler->norotate = 1;
+        handler->imginfo.new_buff = handler->imginfo.buff;
+        return PPM_NOERROR;
+    }
+    else if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == PPM_ERROR) return PPM_ERROR;
 
-            int x0;
-            int y0;
+    // The following are the reasons why orthogonal rotations (90,
+    // 180, 270) don't need to use the rotation formula:
+    // 1. Prevent round-off errors
+    // 2. Faster rotation
+    // 3. No need for interpolation
 
-            double nX;
-            double nY;
+    if (angle == 90) // rotate 90 degrees 
+        for (y = 0; y < handler->imginfo.height; y++)
+            for (x = 0; x < handler->imginfo.width; x++)
+                handler->imginfo.new_buff[x][handler->imginfo.new_width - y - 1] = handler->imginfo.buff[y][x];
+    else if (angle == 180) 	// rotate 180 degrees
+        for (y = 0; y < handler->imginfo.height; y++)
+            for (x = 0; x < handler->imginfo.width; x++)
+                handler->imginfo.new_buff[handler->imginfo.new_height - y - 1][handler->imginfo.new_width - x - 1] = handler->imginfo.buff[y][x];
+	else if (angle == 270) // rotate 270 degrees
+        for (y = 0; y < handler->imginfo.height; y++)
+            for (x = 0; x < handler->imginfo.width; x++)
+                handler->imginfo.new_buff[handler->imginfo.new_height - y - 1][x] = handler->imginfo.buff[y][x];
+    else
+    {
+        for (y = 0; y < handler->imginfo.new_height; y++) memset(handler->imginfo.new_buff[y], 0x00, handler->imginfo.new_width * sizeof(pixel));
 
-			xx = x - x_offset;
-			yy = y - y_offset;
-			x0 = xx - x_center_in;
-			y0 = yy - y_center_in;
-
-            nX = ((cos(angle) * (double) (x0)) + (sin(angle) * (double) (y0)) + x_center_in);
-            nY = (-(sin(angle) * (double)(x0)) + (cos(angle) * (double) (y0)) + y_center_in);
-
-			if ((round(nX) < handler->imginfo.width) && (round(nY) < handler->imginfo.height) && (round(nY) >= 0) && (round(nX) >= 0))
+        for (y = 0; y < handler->imginfo.new_height; y++)
+            for (x = 0; x < handler->imginfo.new_width; x++)
             {
-                double q_r = 0.0f;
-                double q_g = 0.0f;
-                double q_b = 0.0f;
-                int j;
-                int i;
+                int xx = x - x_offset;
+                int yy = y - y_offset;
 
-                // no interpolation on the edges
-                if (round(nX) > 1 && round(nY) > 1 && round(nX) < handler->imginfo.width - 2 && round(nY) < handler->imginfo.height - 2)
+                int x0 = xx - x_center_in;
+                int y0 = yy - y_center_in;
+
+                // rotation formula
+                double nX = ((cos(angle) * (double) (x0)) + (sin(angle) * (double) (y0)) + x_center_in);
+                double nY = (-(sin(angle) * (double)(x0)) + (cos(angle) * (double) (y0)) + y_center_in);
+
+                if ((round(nX) < handler->imginfo.width) && (round(nY) < handler->imginfo.height) && (round(nY) >= 0) && (round(nX) >= 0))
                 {
-                    for (j = 0; j < 4; j++) 
+                    double q_r = 0.0f;
+                    double q_g = 0.0f;
+                    double q_b = 0.0f;
+                    int j;
+                    int i;
+
+                    // no interpolation on the edges
+                    if (round(nX) > 1 && round(nY) > 1 && round(nX) < handler->imginfo.width - 2 && round(nY) < handler->imginfo.height - 2)
                     {
-                        int v = floor(nY) - 1 + j;
-                        double p_r = 0.0f;
-                        double p_g = 0.0f;
-                        double p_b = 0.0f;
-                        for (i = 0; i < 4; i++)
+                        for (j = 0; j < 4; j++) 
                         {
-                            int u = floor(nX) - 1 + i;
-                            p_r += (handler->imginfo.buff[v][u].r * cubic(nX - u));
-                            p_g += (handler->imginfo.buff[v][u].g * cubic(nX - u));
-                            p_b += (handler->imginfo.buff[v][u].b * cubic(nX - u));
+                            int v = floor(nY) - 1 + j;
+                            double p_r = 0.0f;
+                            double p_g = 0.0f;
+                            double p_b = 0.0f;
+                            for (i = 0; i < 4; i++)
+                            {
+                                int u = floor(nX) - 1 + i;
+                                p_r += (handler->imginfo.buff[v][u].r * cubic(nX - u));
+                                p_g += (handler->imginfo.buff[v][u].g * cubic(nX - u));
+                                p_b += (handler->imginfo.buff[v][u].b * cubic(nX - u));
+                            }
+
+                            q_r += p_r * cubic(nY - v);
+                            q_g += p_g * cubic(nY - v);
+                            q_b += p_b * cubic(nY - v);
                         }
 
-                        q_r += p_r * cubic(nY - v);
-                        q_g += p_g * cubic(nY - v);
-                        q_b += p_b * cubic(nY - v);
-                    }
-
-                    if (q_r < 0) q_r = 0.0f;
-                    if (q_g < 0) q_g = 0.0f;
-                    if (q_b < 0) q_b = 0.0f;
+                        if (q_r < 0) q_r = 0.0f;
+                        if (q_g < 0) q_g = 0.0f;
+                        if (q_b < 0) q_b = 0.0f;
                     
-                    if (q_r >= 256) q_r = 255.0f;
-                    if (q_g >= 256) q_g = 255.0f;
-                    if (q_b >= 256) q_b = 255.0f;
+                        if (q_r >= 256) q_r = 255.0f;
+                        if (q_g >= 256) q_g = 255.0f;
+                        if (q_b >= 256) q_b = 255.0f;
 
-                    handler->imginfo.new_buff[yy+y_offset][xx+x_offset].r = (int) q_r;
-                    handler->imginfo.new_buff[yy+y_offset][xx+x_offset].g = (int) q_g;
-                    handler->imginfo.new_buff[yy+y_offset][xx+x_offset].b = (int) q_b;
-                }
-                else
-                {
-                    handler->imginfo.new_buff[yy+y_offset][xx+x_offset] = handler->imginfo.buff[(int)round(nY)][(int)round(nX)];
+                        handler->imginfo.new_buff[yy+y_offset][xx+x_offset].r = (int) q_r;
+                        handler->imginfo.new_buff[yy+y_offset][xx+x_offset].g = (int) q_g;
+                        handler->imginfo.new_buff[yy+y_offset][xx+x_offset].b = (int) q_b;
+                    }
+                    else handler->imginfo.new_buff[yy+y_offset][xx+x_offset] = handler->imginfo.buff[(int)round(nY)][(int)round(nX)];
                 }
             }
-        }
     }
 
     return PPM_NOERROR;
@@ -857,7 +824,7 @@ int imresize(ppm_image_handler *handler, int out_size, int dim, double **weights
         handler->imginfo.new_height = out_size;
         handler->imginfo.new_width = handler->imginfo.width;
 
-        if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.width) == -1) return PPM_ERROR;
+        if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.width) == PPM_ERROR) return PPM_ERROR;
   
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
@@ -881,12 +848,12 @@ int imresize(ppm_image_handler *handler, int out_size, int dim, double **weights
                 handler->imginfo.new_buff[y][x].b = (sum_b < 0.0f) ? 0.0f : (sum_b >= 256) ? 255.0f : (int) sum_b;
             }
     }
-    else
+    else // scale width
     {
         handler->imginfo.new_height = handler->imginfo.height;
         handler->imginfo.new_width = out_size;
 
-        if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return PPM_ERROR;
+        if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == PPM_ERROR) return PPM_ERROR;
   
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
@@ -950,10 +917,21 @@ int image_buff_alloc(pixel ***new_buff, unsigned int height, unsigned int width)
 {
     int y;
 
-    if (((*new_buff) = (pixel **) malloc(height * sizeof(pixel *))) == NULL) return PPM_ERROR;
+    if (((*new_buff) = (pixel **) malloc(height * sizeof(pixel *))) == NULL)
+	{
+		printf("can not allocate image buff for height\n");
+		return PPM_ERROR;
+	}
 
     for (y = 0; y < height; y++)
-        if (((*new_buff)[y] = (pixel *) malloc(width * sizeof(pixel))) == NULL) return PPM_ERROR;
+    {
+        if (((*new_buff)[y] = (pixel *) malloc(width * sizeof(pixel))) == NULL)
+		{
+			printf("can not allocate image buff for width\n");
+			return PPM_ERROR;
+		}
+        memset((*new_buff)[y], 0x00, width * sizeof(pixel));
+    }
 
     return PPM_NOERROR;
 }
@@ -969,21 +947,17 @@ int mono(ppm_image_handler *handler) // TODO: should return error
     handler->imginfo.new_height = handler->imginfo.height;
     handler->imginfo.new_width = handler->imginfo.width;
 
-    if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return PPM_ERROR;
+    if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == PPM_ERROR) return PPM_ERROR;
 
 // bayer 4x4  
 // ------------------------------------------------------------------------------------------------------------------------------------------------------
     for (y = 0; y < handler->imginfo.new_height; y++)
-    {
         for (x = 0; x < handler->imginfo.new_width; x++)
         {
             unsigned char oldpixel = (handler->imginfo.buff[y][x].r + handler->imginfo.buff[y][x].g + handler->imginfo.buff[y][x].b) / 3;
-            if (oldpixel >= matrix[(x % 4) * 4 + (y % 4)] * 255)
-                handler->imginfo.new_buff[y][x].r = 0;
-            else
-                handler->imginfo.new_buff[y][x].r = 1;
+            if (oldpixel >= matrix[(x % 4) * 4 + (y % 4)] * 255) handler->imginfo.new_buff[y][x].r = 0;
+            else handler->imginfo.new_buff[y][x].r = 1;
         }
-    }
 // ------------------------------------------------------------------------------------------------------------------------------------------------------
     return PPM_NOERROR;
 }
@@ -997,16 +971,21 @@ int gray(ppm_image_handler *handler) // TODO: should return error
     handler->imginfo.new_height = handler->imginfo.height;
     handler->imginfo.new_width = handler->imginfo.width;
 
-    if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == -1) return PPM_ERROR;
+    if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == PPM_ERROR) return PPM_ERROR;
 
     for (y = 0; y < handler->imginfo.new_height; y++)
         for (x = 0; x < handler->imginfo.new_width; x++)
-        {
             handler->imginfo.new_buff[y][x].r = (unsigned char)((handler->imginfo.buff[y][x].r + handler->imginfo.buff[y][x].g + handler->imginfo.buff[y][x].b) / 3);
-        }
-
 
     return PPM_NOERROR;
+}
+
+void renewBuffer(ppm_image_handler *handler)
+{
+    releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
+    handler->imginfo.buff = handler->imginfo.new_buff;
+    handler->imginfo.height = handler->imginfo.new_height;
+    handler->imginfo.width = handler->imginfo.new_width;
 }
 
 int doProcessPPM(ppm_image_handler *handler)
@@ -1070,15 +1049,17 @@ int doProcessPPM(ppm_image_handler *handler)
         int dim;
 
         printf("resize\n");
+		
+		if ((int) (handler->imginfo.new_width = handler->output_width_size) < 1)
+		{
+			printf("invalid option for width: %0d\n", handler->imginfo.new_width);
+			return PPM_ERROR;
+		}
 
-        if (init_img_scale_info(handler) != 0)
-        {
-            return PPM_ERROR;
-        }
-
-        scale[0] = (double) (handler->imginfo.new_height / handler->imginfo.height);
-        scale[1] = (double) (handler->imginfo.new_width / handler->imginfo.width);
-
+        scale[1] = (double) ((double) handler->imginfo.new_width / handler->imginfo.width);
+		handler->imginfo.new_height = ((double) handler->imginfo.height * scale[1]);
+        scale[0] = (double) ((double) handler->imginfo.new_height / handler->imginfo.height);
+		
         if (scale[0] < scale[1])
         {
             order[0] = 0;
@@ -1090,22 +1071,22 @@ int doProcessPPM(ppm_image_handler *handler)
             order[1] = 0;
         }
 
-        if (calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &weights[0], &indices[0], &weights_sz[0]) == -1) return PPM_ERROR;
-        if (calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &weights[1], &indices[1], &weights_sz[1]) == -1) return PPM_ERROR;
+        if (calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &weights[0], &indices[0], &weights_sz[0]) == PPM_ERROR) return PPM_ERROR;
+        if (calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &weights[1], &indices[1], &weights_sz[1]) == PPM_ERROR) return PPM_ERROR;
 
         im_sz[0] = handler->imginfo.new_height;
         im_sz[1] = handler->imginfo.new_width;
 
         out_width = handler->imginfo.new_width;
         dim = order[0];
-        imresize(handler, im_sz[dim], dim, weights[dim], indices[dim], weights_sz[dim]);
+        if ((imresize(handler, im_sz[dim], dim, weights[dim], indices[dim], weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
         releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
         handler->imginfo.buff = handler->imginfo.new_buff;
         handler->imginfo.new_width = out_width;
         handler->imginfo.height = handler->imginfo.new_height;
         handler->imginfo.width = handler->imginfo.new_width;
         dim = order[1];
-        imresize(handler, im_sz[dim], dim, weights[dim], indices[dim], weights_sz[dim]);
+        if ((imresize(handler, im_sz[dim], dim, weights[dim], indices[dim], weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
 
         for (x = 0; x < 2; x++)
         {
@@ -1122,65 +1103,35 @@ int doProcessPPM(ppm_image_handler *handler)
     if (handler->arg_flag.rotate_enable)
     {
         printf("rotate\n");
-        if (handler->arg_flag.resize_enable) // TODO: this is ugly
-        {
-            releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
-            handler->imginfo.buff = handler->imginfo.new_buff;
-            handler->imginfo.height = handler->imginfo.new_height;
-            handler->imginfo.width = handler->imginfo.new_width;
-        }
+        if (handler->arg_flag.resize_enable) renewBuffer(handler);
         rotate(handler);
     }
 
     if (handler->arg_flag.gray_enable)
     {
         printf("gray\n");
-        if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) // TODO: this is ugly
-        {
-            releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
-            handler->imginfo.buff = handler->imginfo.new_buff;
-            handler->imginfo.height = handler->imginfo.new_height;
-            handler->imginfo.width = handler->imginfo.new_width;
-        }
+        if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) renewBuffer(handler);
         gray(handler);
     }
         
     if (handler->arg_flag.mono_enable)
     {
         printf("mono\n");
-        if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) // TODO: this is ugly
-        {
-            releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
-            handler->imginfo.buff = handler->imginfo.new_buff;
-            handler->imginfo.height = handler->imginfo.new_height;
-            handler->imginfo.width = handler->imginfo.new_width;
-        }
+        if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) renewBuffer(handler);
         mono(handler);
     }
 
 	if (handler->arg_flag.flipv_enable)
     {
         printf("flipv\n");
-        if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) // TODO: this is ugly
-        {
-            releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
-            handler->imginfo.buff = handler->imginfo.new_buff;
-            handler->imginfo.height = handler->imginfo.new_height;
-            handler->imginfo.width = handler->imginfo.new_width;
-        }
+        if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable)  renewBuffer(handler);
         flip(handler,1);
     }
         
 	if (handler->arg_flag.fliph_enable)
     {
         printf("fliph\n");
-        if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) // TODO: this is ugly
-        {
-            releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
-            handler->imginfo.buff = handler->imginfo.new_buff;
-            handler->imginfo.height = handler->imginfo.new_height;
-            handler->imginfo.width = handler->imginfo.new_width;
-        }
+        if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) renewBuffer(handler);
         flip(handler,0);
     }
         
@@ -1194,7 +1145,7 @@ int doProcessPPM(ppm_image_handler *handler)
     }
 
     // buffer is reused for flipv and fliph
-    if (!(handler->arg_flag.flipv_enable || handler->arg_flag.fliph_enable)) releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
+    if (!(handler->norotate || handler->arg_flag.flipv_enable || handler->arg_flag.fliph_enable)) releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
 
     // release allocated image buffer
     free(handler->file_buffer);
