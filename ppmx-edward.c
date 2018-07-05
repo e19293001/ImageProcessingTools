@@ -26,11 +26,11 @@
 #define round(val) floor(val + 0.5)
 
 #define CHECK_ERROR(condition, message) \
-	if (condition) \
-	{ \
-		printf(message); \
-		return PPM_ERROR; \
-	} 
+    if (condition) \
+    { \
+        printf(message); \
+        return PPM_ERROR; \
+    } 
 
 typedef struct pixel {
     unsigned char r;
@@ -53,10 +53,10 @@ typedef struct img_info {
 typedef struct args_flag {
     char resize_enable;
     char rotate_enable;
-	char flipv_enable;
-	char fliph_enable;
-	char gray_enable;
-	char mono_enable;
+    char flipv_enable;
+    char fliph_enable;
+    char gray_enable;
+    char mono_enable;
 } args_flag;
 
 // this structure is used for parsing the header file
@@ -76,8 +76,8 @@ typedef struct ppm_image_handler {
     unsigned int filesize;
     unsigned int index_buffer;
     token tkn;
-	unsigned int output_width_size;
-	double angle;
+    unsigned int output_width_size;
+    double angle;
     char norotate;
 } ppm_image_handler;
 
@@ -92,87 +92,87 @@ int getImageInfo(ppm_image_handler *handler);
 void releaseBuffer(pixel ***new_buff, unsigned int height);
 int image_buff_alloc(pixel ***new_buff, unsigned int height, unsigned int width);
 void calc_rot_size(double angle,
-				   unsigned int old_width, unsigned int old_height,
-				   unsigned int *new_width, unsigned int *new_height);
+                   unsigned int old_width, unsigned int old_height,
+                   unsigned int *new_width, unsigned int *new_height);
 int putImageToFile(ppm_image_handler *handler);
 void usage();
 void renewBuffer(ppm_image_handler *handler);
 
 int main(int argc, char *argv[])
 {
-	ppm_image_handler handler;
-	int x;
-	int filename_flag = 0;
+    ppm_image_handler handler;
+    int x;
+    int filename_flag = 0;
 
     memset(&handler, 0, sizeof(ppm_image_handler));
 
-	for (x = 1; x < argc; x++)
-		if (argv[x][0] == '-')
-			if (argv[x][1] == 'f')
-				if (argv[x][2] == 'h') 
-				{
-					CHECK_ERROR(handler.arg_flag.fliph_enable, "Error: Duplicate options not allowed\n")
-					CHECK_ERROR(handler.arg_flag.flipv_enable, "Error: Conflicting options not allowed\n")
-					handler.arg_flag.fliph_enable = 1;
-				}
-				else if (argv[x][2] == 'v') 
-				{
-					CHECK_ERROR(handler.arg_flag.flipv_enable, "Error: Duplicate options not allowed\n")
-					CHECK_ERROR(handler.arg_flag.fliph_enable, "Error: Conflicting options not allowed\n")
-					handler.arg_flag.flipv_enable = 1;
-				}
-				else
-				{
-					printf("Error: invalid option for flip.\nallowed options are -fh -fv only.\n");
-					return PPM_ERROR;
-				}
-			else if (argv[x][1] == 'w')
-			{
-				int index = 2;
-				while (argv[x][index] != 0)	CHECK_ERROR(isalpha(argv[x][index++]), "Error: invalid option for scaling.\n")
-				CHECK_ERROR(handler.arg_flag.resize_enable, "Error: Duplicate options not allowed\n")
-				handler.arg_flag.resize_enable = 1;
-				handler.output_width_size = (int) atoi(&argv[x][2]);
-			}
-			else if (argv[x][1] == 'r')
-			{
-				int index = 2;
-				CHECK_ERROR((argv[x][2] == 0), "Error: invalid option for rotate\n")
-				CHECK_ERROR(handler.arg_flag.rotate_enable, "Error: Duplicate options not allowed\n")
-				handler.arg_flag.rotate_enable = 1;
-				while (argv[x][index] != 0)	CHECK_ERROR(isalpha(argv[x][index++]), "Error: invalid option for rotate.\n")
-				handler.angle = (double) atoi(&argv[x][2]);
+    for (x = 1; x < argc; x++)
+        if (argv[x][0] == '-')
+            if (argv[x][1] == 'f')
+                if (argv[x][2] == 'h') 
+                {
+                    CHECK_ERROR(handler.arg_flag.fliph_enable, "Error: Duplicate options not allowed\n")
+                    CHECK_ERROR(handler.arg_flag.flipv_enable, "Error: Conflicting options not allowed\n")
+                    handler.arg_flag.fliph_enable = 1;
+                }
+                else if (argv[x][2] == 'v') 
+                {
+                    CHECK_ERROR(handler.arg_flag.flipv_enable, "Error: Duplicate options not allowed\n")
+                    CHECK_ERROR(handler.arg_flag.fliph_enable, "Error: Conflicting options not allowed\n")
+                    handler.arg_flag.flipv_enable = 1;
+                }
+                else
+                {
+                    printf("Error: invalid option for flip.\nallowed options are -fh -fv only.\n");
+                    return PPM_ERROR;
+                }
+            else if (argv[x][1] == 'w')
+            {
+                int index = 2;
+                while (argv[x][index] != 0)    CHECK_ERROR(isalpha(argv[x][index++]), "Error: invalid option for scaling.\n")
+                CHECK_ERROR(handler.arg_flag.resize_enable, "Error: Duplicate options not allowed\n")
+                handler.arg_flag.resize_enable = 1;
+                handler.output_width_size = (int) atoi(&argv[x][2]);
+            }
+            else if (argv[x][1] == 'r')
+            {
+                int index = 2;
+                CHECK_ERROR((argv[x][2] == 0), "Error: invalid option for rotate\n")
+                CHECK_ERROR(handler.arg_flag.rotate_enable, "Error: Duplicate options not allowed\n")
+                handler.arg_flag.rotate_enable = 1;
+                while (argv[x][index] != 0)    CHECK_ERROR(isalpha(argv[x][index++]), "Error: invalid option for rotate.\n")
+                handler.angle = (double) atoi(&argv[x][2]);
                 CHECK_ERROR(handler.angle < 0 || handler.angle >= 360, "Error: invalid option for rotate.\n")
-			}
+            }
             else if (strcmp(&argv[x][1], "gray") == 0) 
-			{
-				CHECK_ERROR(handler.arg_flag.gray_enable, "Error: Duplicate options not allowed\n")
-				CHECK_ERROR(handler.arg_flag.mono_enable, "Error: Conflicting options not allowed\n")
-				handler.arg_flag.gray_enable = 1;
-			}
-			else if (strcmp(&argv[x][1], "mono") == 0) 
-			{
-				CHECK_ERROR(handler.arg_flag.mono_enable, "Error: Duplicate options not allowed\n")
-				CHECK_ERROR(handler.arg_flag.gray_enable, "Error: Conflicting options not allowed\n")
-				handler.arg_flag.mono_enable = 1;
-			}
+            {
+                CHECK_ERROR(handler.arg_flag.gray_enable, "Error: Duplicate options not allowed\n")
+                CHECK_ERROR(handler.arg_flag.mono_enable, "Error: Conflicting options not allowed\n")
+                handler.arg_flag.gray_enable = 1;
+            }
+            else if (strcmp(&argv[x][1], "mono") == 0) 
+            {
+                CHECK_ERROR(handler.arg_flag.mono_enable, "Error: Duplicate options not allowed\n")
+                CHECK_ERROR(handler.arg_flag.gray_enable, "Error: Conflicting options not allowed\n")
+                handler.arg_flag.mono_enable = 1;
+            }
             else
             {
                 printf("Error: invalid option: %s\n", &argv[x][1]);
                 usage();
                 return PPM_ERROR;
             }
-		else 
-		{
-			CHECK_ERROR(filename_flag, "Error: invalid options\n");
-			handler.filename = &argv[x][0];
-			filename_flag = 1;
-		}
-	if (handler.filename == NULL || filename_flag == 0)
-	{
-		usage();
+        else 
+        {
+            CHECK_ERROR(filename_flag, "Error: invalid options\n");
+            handler.filename = &argv[x][0];
+            filename_flag = 1;
+        }
+    if (handler.filename == NULL || filename_flag == 0)
+    {
+        usage();
         return PPM_ERROR;
-	}
+    }
     if (doProcessPPM(&handler) != 0) return PPM_ERROR;
 
     return 0;
@@ -180,15 +180,15 @@ int main(int argc, char *argv[])
 
 void usage()
 {
-	printf("ppmx-edward [options] (input filename)\n");
-	printf("Options -fv  Flip vertically\n");
-	printf("        -fh  Flip horizontally\n");
-	printf("        -w(new width) Scale to the new width\n");
-	printf("        -w100 means new width is 100\n");
-	printf("        -r(angle)  Rotate (CW)\n");
-	printf("        -r30 means rotate 30 degree CW.\n");
-	printf("        -mono Convert to bilevel (.pbm) format\n");
-	printf("        -gray  Convert to grayscale (.pgm) format\n");
+    printf("ppmx-edward [options] (input filename)\n");
+    printf("Options -fv  Flip vertically\n");
+    printf("        -fh  Flip horizontally\n");
+    printf("        -w(new width) Scale to the new width\n");
+    printf("        -w100 means new width is 100\n");
+    printf("        -r(angle)  Rotate (CW)\n");
+    printf("        -r30 means rotate 30 degree CW.\n");
+    printf("        -mono Convert to bilevel (.pbm) format\n");
+    printf("        -gray  Convert to grayscale (.pgm) format\n");
 }
 
 // write output image to file
@@ -259,9 +259,9 @@ int putImageToFile(ppm_image_handler *handler)
                 }
             }
             if (tmp-1 != 0)
-			{
+            {
                 CHECK_ERROR(((fwrite(&z,1, 1, fofp)) != 1), "Error: failed in writing to file\n")
-			}
+            }
         }
     }
     else
@@ -527,7 +527,7 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
         for (x = 0; x < P; x++)
             if (weights[y][x] != 0.0f) ind2store[x] = 1;
 
-	CHECK_ERROR((((*out_indices) = (int **) malloc(out_size * sizeof(int*))) == NULL), "error: allocating out_indices\n")
+    CHECK_ERROR((((*out_indices) = (int **) malloc(out_size * sizeof(int*))) == NULL), "error: allocating out_indices\n")
     CHECK_ERROR((((*out_weights) = (double **) malloc(out_size * sizeof(double*))) == NULL), "error: allocating out_weights\n")
     
     for (y = 0; y < out_size; y++)
@@ -557,7 +557,7 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
         free(indices[y]);
         free(weights[y]);
     }
-	
+    
     free(ind2store);
     free(weights);
     free(indices);
@@ -567,13 +567,13 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
 }
 
 void calc_rot_size(double angle,
-				   unsigned int old_width, unsigned int old_height,
-				   unsigned int *new_width, unsigned int *new_height)
+                   unsigned int old_width, unsigned int old_height,
+                   unsigned int *new_width, unsigned int *new_height)
 {
     double theta1 = (angle * M_PI)/180.0; // convert to radians
-	*new_width = round((old_width * cos(theta1)) + (old_height * sin(theta1)));
-	*new_height = round((old_width * sin(theta1)) + (old_height * cos(theta1)));
-}	
+    *new_width = round((old_width * cos(theta1)) + (old_height * sin(theta1)));
+    *new_height = round((old_width * sin(theta1)) + (old_height * cos(theta1)));
+}    
 
 int rotate(ppm_image_handler *handler)
 {
@@ -582,27 +582,27 @@ int rotate(ppm_image_handler *handler)
     int x_center_in;
     int y_center_in;
 
-	double angle;
+    double angle;
 
-	int x_offset;
-	int y_offset;
+    int x_offset;
+    int y_offset;
 
-	angle = handler->angle;
+    angle = handler->angle;
 
-	if (angle >= 270) angle = 360 - angle;
-	else if (angle > 180) angle = angle - 180;
-	else if (angle > 90) angle = 180 - angle;
+    if (angle >= 270) angle = 360 - angle;
+    else if (angle > 180) angle = angle - 180;
+    else if (angle > 90) angle = 180 - angle;
 
-	calc_rot_size(angle, handler->imginfo.width, handler->imginfo.height, &handler->imginfo.new_width, &handler->imginfo.new_height);
+    calc_rot_size(angle, handler->imginfo.width, handler->imginfo.height, &handler->imginfo.new_width, &handler->imginfo.new_height);
     angle = (handler->angle * M_PI) / 180.0; // convert to radians
-	
-	x_center_in = floor(handler->imginfo.width / 2);
-	y_center_in = floor(handler->imginfo.height / 2);
+    
+    x_center_in = floor(handler->imginfo.width / 2);
+    y_center_in = floor(handler->imginfo.height / 2);
 
-	x_offset = floor(handler->imginfo.new_width / 2) - floor(handler->imginfo.width / 2);
-	y_offset = floor(handler->imginfo.new_height / 2) - floor(handler->imginfo.height / 2);
+    x_offset = floor(handler->imginfo.new_width / 2) - floor(handler->imginfo.width / 2);
+    y_offset = floor(handler->imginfo.new_height / 2) - floor(handler->imginfo.height / 2);
 
-	// 0 degree rotation: no rotation, just copy the buffer
+    // 0 degree rotation: no rotation, just copy the buffer
     if (handler->angle == 0)
     {
         handler->norotate = 1;
@@ -621,14 +621,14 @@ int rotate(ppm_image_handler *handler)
         for (y = 0; y < handler->imginfo.height; y++)
             for (x = 0; x < handler->imginfo.width; x++)
                 handler->imginfo.new_buff[x][handler->imginfo.new_width - y - 1] = handler->imginfo.buff[y][x];
-    else if (handler->angle == 180) 	// rotate 180 degrees
+    else if (handler->angle == 180)     // rotate 180 degrees
         for (y = 0; y < handler->imginfo.height; y++)
             for (x = 0; x < handler->imginfo.width; x++)
                 handler->imginfo.new_buff[handler->imginfo.new_height - y - 1][handler->imginfo.new_width - x - 1] = handler->imginfo.buff[y][x];
-	else if (handler->angle == 270) // rotate 270 degrees
+    else if (handler->angle == 270) // rotate 270 degrees
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
-				handler->imginfo.new_buff[handler->imginfo.new_height - y - 1][x] = handler->imginfo.buff[x][y];
+                handler->imginfo.new_buff[handler->imginfo.new_height - y - 1][x] = handler->imginfo.buff[x][y];
     else
     {
         for (y = 0; y < handler->imginfo.new_height; y++) memset(handler->imginfo.new_buff[y], 0x00, handler->imginfo.new_width * sizeof(pixel));
@@ -907,12 +907,12 @@ int doProcessPPM(ppm_image_handler *handler)
         int out_width;
         int dim;
 
-		CHECK_ERROR(((int) (handler->imginfo.new_width = handler->output_width_size) < 1), "invalid option for new width\n")
+        CHECK_ERROR(((int) (handler->imginfo.new_width = handler->output_width_size) < 1), "invalid option for new width\n")
 
         scale[1] = (double) ((double) handler->imginfo.new_width / handler->imginfo.width);
-		handler->imginfo.new_height = ((double) handler->imginfo.height * scale[1]);
+        handler->imginfo.new_height = ((double) handler->imginfo.height * scale[1]);
         scale[0] = (double) ((double) handler->imginfo.new_height / handler->imginfo.height);
-		
+        
         if (scale[0] < scale[1]) order[1] = 1;
         else order[0] = 1;
 
@@ -963,13 +963,13 @@ int doProcessPPM(ppm_image_handler *handler)
         mono(handler);
     }
 
-	if (handler->arg_flag.flipv_enable)
+    if (handler->arg_flag.flipv_enable)
     {
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable)  renewBuffer(handler);
         flip(handler,1);
     }
         
-	if (handler->arg_flag.fliph_enable)
+    if (handler->arg_flag.fliph_enable)
     {
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) renewBuffer(handler);
         flip(handler,0);
