@@ -1,8 +1,6 @@
 // Edward Sillador
-
 // * 06/16/2018 - added flip (vertical / horizontal), scale, rotation, 
-
-// * 12/2017 - initial version
+// * 12/2017    - initial version
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -194,11 +192,13 @@ void usage()
 // write output image to file
 int putImageToFile(ppm_image_handler *handler)
 {
-    int fileout_size =  strlen(handler->filename) + 5;
+    int fileout_size;
     char fileout[MAX_HEADER_CHARS];
     FILE *fofp;
     unsigned int x;
     unsigned int y;
+
+    fileout_size = strlen(handler->filename) + 5;
 
     memset(fileout, '\0', MAX_HEADER_CHARS);
     strncpy(fileout, handler->filename, fileout_size);
@@ -642,9 +642,12 @@ int rotate(ppm_image_handler *handler)
                 int x0 = xx - x_center_in;
                 int y0 = yy - y_center_in;
 
+                double nX;
+                double nY;
+
                 // rotation formula
-                double nX = ((cos(angle) * (double) (x0)) + (sin(angle) * (double) (y0)) + x_center_in);
-                double nY = (-(sin(angle) * (double)(x0)) + (cos(angle) * (double) (y0)) + y_center_in);
+                nX = ((cos(angle) * (double) (x0)) + (sin(angle) * (double) (y0)) + x_center_in);
+                nY = (-(sin(angle) * (double)(x0)) + (cos(angle) * (double) (y0)) + y_center_in);
 
                 if ((round(nX) < handler->imginfo.width) && (round(nY) < handler->imginfo.height) && (round(nY) >= 0) && (round(nX) >= 0))
                 {
@@ -659,13 +662,15 @@ int rotate(ppm_image_handler *handler)
                     {
                         for (j = 0; j < 4; j++) 
                         {
-                            int v = floor(nY) - 1 + j;
+                            int v;
+                            v = floor(nY) - 1 + j;
                             double p_r = 0.0f;
                             double p_g = 0.0f;
                             double p_b = 0.0f;
                             for (i = 0; i < 4; i++)
                             {
-                                int u = floor(nX) - 1 + i;
+                                int u;
+                                u = floor(nX) - 1 + i;
                                 p_r += (handler->imginfo.buff[v][u].r * cubic(nX - u));
                                 p_g += (handler->imginfo.buff[v][u].g * cubic(nX - u));
                                 p_b += (handler->imginfo.buff[v][u].b * cubic(nX - u));
