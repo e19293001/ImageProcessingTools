@@ -490,23 +490,16 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
         for (x = 0; x < P; x++)
             indices[y][x] = aux[mod(((int) indices[y][x]),aux_size)];
 
-    for (y = 0; y < out_size; y++) {
-        int num_non_zero_t = 0;
-        for (x = 0; x < P; x++) {
-            if (weights[y][x] != 0.0f) {
-                num_non_zero_t = num_non_zero_t + 1;
-            }
-        }
-        if (num_non_zero < num_non_zero_t) num_non_zero = num_non_zero_t;
-    }
+    for (x = 0; x < P; x++)
+        if (weights[0][x] != 0.0f)
+            num_non_zero = num_non_zero + 1;
 
     CHECK_ERROR(((ind2store = (unsigned char*) malloc(P * sizeof(unsigned char*))) == NULL), "error: allocating ind2store\n")
 
     for (x = 0; x < P; x++) ind2store[x] = 0;
 
-    for (y = 0; y < out_size; y++)
-        for (x = 0; x < P; x++)
-            if (weights[y][x] != 0.0f) ind2store[x] = 1;
+    for (x = 0; x < P; x++)
+        if (weights[0][x] != 0.0f) ind2store[x] = 1;
 
     CHECK_ERROR(((for_outindices = (int **) malloc(out_size * sizeof(int*))) == NULL), "error: allocating out_indices\n")
     CHECK_ERROR(((for_outweights = (double **) malloc(out_size * sizeof(double*))) == NULL), "error: allocating out_weights\n")
@@ -520,7 +513,7 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
 
     for (y = 0; y < out_size; y++) {
         ind_w_ptr_x = 0;
-        for (x = 0; x < num_non_zero; x++)
+        for (x = 0; x < P; x++)
             if (ind2store[x]) {
                 for_outindices[y][ind_w_ptr_x] = indices[y][x];
                 for_outweights[y][ind_w_ptr_x] = weights[y][x];
