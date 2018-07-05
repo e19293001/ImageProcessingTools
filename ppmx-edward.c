@@ -11,11 +11,13 @@
 #define M_PI 3.14159265358979323846
 #define DATA_BUFLEN 10
 #define MAX_HEADER_CHARS 128
+
 #define PPM_ERROR -1
 #define PPM_NOERROR 0
 #define PPM_UNSIGNED 1
 #define PPM_MAGIC_NUM 2
 
+// file types supported
 #define FILETYPE_PPM 0
 #define FILETYPE_PGM 1
 #define FILETYPE_PBM 2
@@ -107,67 +109,63 @@ int main(int argc, char *argv[])
     for (x = 1; x < argc; x++)
         if (argv[x][0] == '-')
             if (argv[x][1] == 'f')
-                if (argv[x][2] == 'h') 
-                {
+                if (argv[x][2] == 'h') {
                     CHECK_ERROR(handler.arg_flag.fliph_enable, "Error: Duplicate options not allowed\n")
                     CHECK_ERROR(handler.arg_flag.flipv_enable, "Error: Conflicting options not allowed\n")
                     handler.arg_flag.fliph_enable = 1;
                 }
-                else if (argv[x][2] == 'v') 
-                {
+                else if (argv[x][2] == 'v') {
                     CHECK_ERROR(handler.arg_flag.flipv_enable, "Error: Duplicate options not allowed\n")
                     CHECK_ERROR(handler.arg_flag.fliph_enable, "Error: Conflicting options not allowed\n")
                     handler.arg_flag.flipv_enable = 1;
                 }
-                else
-                {
+                else {
                     printf("Error: invalid option for flip.\nallowed options are -fh -fv only.\n");
                     return PPM_ERROR;
                 }
-            else if (argv[x][1] == 'w')
-            {
+            else if (argv[x][1] == 'w') {
                 int index = 2;
-                while (argv[x][index] != 0)    CHECK_ERROR(isalpha(argv[x][index++]), "Error: invalid option for scaling.\n")
+
+                while (argv[x][index] != 0) {
+                    CHECK_ERROR(!isdigit(argv[x][index++]), "Error: invalid option for scaling.\n")
+                }
+
                 CHECK_ERROR(handler.arg_flag.resize_enable, "Error: Duplicate options not allowed\n")
                 handler.arg_flag.resize_enable = 1;
                 handler.output_width_size = (int) atoi(&argv[x][2]);
             }
-            else if (argv[x][1] == 'r')
-            {
+            else if (argv[x][1] == 'r') {
                 int index = 2;
                 CHECK_ERROR((argv[x][2] == 0), "Error: invalid option for rotate\n")
                 CHECK_ERROR(handler.arg_flag.rotate_enable, "Error: Duplicate options not allowed\n")
                 handler.arg_flag.rotate_enable = 1;
-                while (argv[x][index] != 0)    CHECK_ERROR(isalpha(argv[x][index++]), "Error: invalid option for rotate.\n")
+
+                while (argv[x][index] != 0) CHECK_ERROR(!isdigit(argv[x][index++]), "Error: invalid option for rotate.\n")
+
                 handler.angle = (double) atoi(&argv[x][2]);
                 CHECK_ERROR(handler.angle < 0 || handler.angle >= 360, "Error: invalid option for rotate.\n")
             }
-            else if (strcmp(&argv[x][1], "gray") == 0) 
-            {
+            else if (strcmp(&argv[x][1], "gray") == 0) {
                 CHECK_ERROR(handler.arg_flag.gray_enable, "Error: Duplicate options not allowed\n")
                 CHECK_ERROR(handler.arg_flag.mono_enable, "Error: Conflicting options not allowed\n")
                 handler.arg_flag.gray_enable = 1;
             }
-            else if (strcmp(&argv[x][1], "mono") == 0) 
-            {
+            else if (strcmp(&argv[x][1], "mono") == 0) {
                 CHECK_ERROR(handler.arg_flag.mono_enable, "Error: Duplicate options not allowed\n")
                 CHECK_ERROR(handler.arg_flag.gray_enable, "Error: Conflicting options not allowed\n")
                 handler.arg_flag.mono_enable = 1;
             }
-            else
-            {
+            else {
                 printf("Error: invalid option: %s\n", &argv[x][1]);
                 usage();
                 return PPM_ERROR;
             }
-        else 
-        {
+        else {
             CHECK_ERROR(filename_flag, "Error: invalid options\n");
             handler.filename = &argv[x][0];
             filename_flag = 1;
         }
-    if (handler.filename == NULL || filename_flag == 0)
-    {
+    if (handler.filename == NULL || filename_flag == 0) {
         usage();
         return PPM_ERROR;
     }
@@ -194,7 +192,7 @@ int putImageToFile(ppm_image_handler *handler)
 {
     int fileout_size;
     char fileout[MAX_HEADER_CHARS];
-    FILE *fofp;
+    FILE *fofp = NULL;
     unsigned int x;
     unsigned int y;
 
@@ -208,16 +206,13 @@ int putImageToFile(ppm_image_handler *handler)
 
     CHECK_ERROR((fofp = fopen(fileout, "wb")) == NULL, "Error: unable to open file for writing\n")
 
-    if (handler->imginfo.file_type == FILETYPE_PGM)
-    {
+    if (handler->imginfo.file_type == FILETYPE_PGM) {
         CHECK_ERROR((fwrite("P5\n", 1, 3, fofp)) != 3, "Error: failed in writing to file\n")
     }
-    else if (handler->imginfo.file_type == FILETYPE_PBM)
-    {
+    else if (handler->imginfo.file_type == FILETYPE_PBM) {
         CHECK_ERROR((fwrite("P4\n", 1, 3, fofp)) != 3, "Error: failed in writing to file\n")
     }
-    else
-    {
+    else {
         CHECK_ERROR((fwrite("P6\n", 1, 3, fofp)) != 3, "Error: failed in writing to file\n")
     }
 
@@ -230,44 +225,36 @@ int putImageToFile(ppm_image_handler *handler)
     sprintf(fileout, "%u\n", handler->imginfo.new_height);
     CHECK_ERROR(((fwrite(fileout, 1, strlen(fileout), fofp)) != strlen(fileout)), "Error: failed in writing to file\n")
 
-    if (!(handler->imginfo.file_type == FILETYPE_PBM))
-    {
+    if (!(handler->imginfo.file_type == FILETYPE_PBM)) {
         sprintf(fileout, "%u\n", handler->imginfo.max_color);
         CHECK_ERROR(((fwrite(fileout, 1, strlen(fileout), fofp)) != strlen(fileout)), "Error: failed in writing to file\n")
     }
 
     if (handler->imginfo.file_type == FILETYPE_PGM)
         for (y = 0; y < handler->imginfo.new_height; y++)
-            for (x = 0; x < handler->imginfo.new_width; x++)
-            {
+            for (x = 0; x < handler->imginfo.new_width; x++) {
                 CHECK_ERROR(((fwrite(&handler->imginfo.new_buff[y][x].r,1, 1, fofp)) != 1), "Error: failed in writing to file\n")
             }
-    else if (handler->imginfo.file_type == FILETYPE_PBM)
-    {
+    else if (handler->imginfo.file_type == FILETYPE_PBM) {
         unsigned char tmp = 0;
         int z = 0;
-        for (y = 0; y < handler->imginfo.new_height; y++)
-        {
-            for (x = 0, tmp = 1, z = 0; x < (handler->imginfo.new_width); x++, tmp++)
-            {
+        for (y = 0; y < handler->imginfo.new_height; y++) {
+            for (x = 0, tmp = 1, z = 0; x < (handler->imginfo.new_width); x++, tmp++) {
                 z = z | (handler->imginfo.new_buff[y][x].r << (8 - tmp));
-                if (tmp % 8 == 0)
-                {
+                if (tmp % 8 == 0) {
                     CHECK_ERROR(((fwrite(&z,1, 1, fofp)) != 1), "Error: failed in writing to file\n")
                     tmp = 0;
                     z = 0;
                 }
             }
-            if (tmp-1 != 0)
-            {
+            if (tmp-1 != 0) {
                 CHECK_ERROR(((fwrite(&z,1, 1, fofp)) != 1), "Error: failed in writing to file\n")
             }
         }
     }
     else
         for (y = 0; y < handler->imginfo.new_height; y++)
-            for (x = 0; x < handler->imginfo.new_width; x++)
-            {
+            for (x = 0; x < handler->imginfo.new_width; x++) {
                 CHECK_ERROR(((fwrite(&handler->imginfo.new_buff[y][x].r,1, 1, fofp)) != 1), "Error: failed in writing to file\n")
                 CHECK_ERROR(((fwrite(&handler->imginfo.new_buff[y][x].g,1, 1, fofp)) != 1), "Error: failed in writing to file\n")
                 CHECK_ERROR(((fwrite(&handler->imginfo.new_buff[y][x].b,1, 1, fofp)) != 1), "Error: failed in writing to file\n")
@@ -301,10 +288,8 @@ void getNextChar(ppm_image_handler *handler)
     else handler->tkn.current_char = EOF;
 
     // ignore comments
-    if (handler->tkn.current_char == '#')
-    {
-        do
-        {
+    if (handler->tkn.current_char == '#') {
+        do {
             handler->tkn.current_char = handler->file_buffer[handler->index_buffer++];
         } while (handler->tkn.current_char != '\n');
         handler->tkn.current_char = '\n';
@@ -321,18 +306,15 @@ int getNextToken(ppm_image_handler *handler, token *current_token)
     while (isspace(handler->tkn.current_char)) getNextChar(handler);
 
     // if token is a digit
-    if (isdigit(handler->tkn.current_char))
-    {
+    if (isdigit(handler->tkn.current_char)) {
         memset(&(handler->tkn.data), '\0', DATA_BUFLEN);
-        do
-        {
+        do {
             handler->tkn.data[index++] = handler->tkn.current_char;
             getNextChar(handler);
         } while (isdigit(handler->tkn.current_char));
         handler->tkn.kind = PPM_UNSIGNED;
     }
-    else if (isalpha(handler->tkn.current_char))
-    { // if token is a word
+    else if (isalpha(handler->tkn.current_char)) { // if token is a word
         do {
             handler->tkn.data[index++] = handler->tkn.current_char;
             getNextChar(handler);
@@ -365,8 +347,7 @@ int getImageInfo(ppm_image_handler *handler)
     // retrieve the width
     CHECK_ERROR((getNextToken(handler, &current_token) != PPM_NOERROR), "error in getting next token. wrong format.\n")
 
-    if (current_token.kind != PPM_UNSIGNED)
-    {
+    if (current_token.kind != PPM_UNSIGNED) {
         printf("error. invalid file format. unable to parse width from input file.\n");
         return PPM_ERROR;
     }
@@ -387,8 +368,7 @@ int getImageInfo(ppm_image_handler *handler)
     CHECK_ERROR((handler->imginfo.buff == NULL), "error. can not allocate memory\n")
   
     handler->imginfo.size = handler->imginfo.height * handler->imginfo.width;
-    for (y = 0; y < handler->imginfo.height; y++)
-    {
+    for (y = 0; y < handler->imginfo.height; y++) {
         handler->imginfo.buff[y] = (pixel *) malloc(handler->imginfo.width * sizeof(pixel));
         CHECK_ERROR((handler->imginfo.buff[y] == NULL), "error. can not allocate memory\n")
         for (x = 0; x < handler->imginfo.width; x++)
@@ -452,9 +432,8 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
     CHECK_ERROR(((indices = (int **) malloc(out_size * sizeof(int*))) == NULL), "error. allocating indices\n")
     CHECK_ERROR(((weights = (double **) malloc(out_size * sizeof(double*))) == NULL), "error. allocating indices\n")
 
-    for (y = 0; y < out_size; y++)
-    {
-        indices[y] = (int *) malloc(P * sizeof(double));
+    for (y = 0; y < out_size; y++) {
+        indices[y] = (int *) malloc(P * sizeof(int));
         weights[y] = (double *) malloc(P * sizeof(double));
 
         CHECK_ERROR((indices[y] == NULL || weights[y] == NULL), "error. allocating memory for weights and indices\n")
@@ -472,8 +451,7 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
 
     // generate indices
     for (y = 0; y < out_size; y++)
-        for (x = 0; x < P; x++)
-        {
+        for (x = 0; x < P; x++) {
             // generate an array from 1 to output_size
             // divide each element to scale
             double u = ((y+1) / scale) + (0.5 * (1 - (1 / scale)));
@@ -483,22 +461,19 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
     // generate weights
     if (scale < 1.0)
         for (y = 0; y < out_size; y++)
-            for (x = 0; x < P; x++)
-            {
+            for (x = 0; x < P; x++) {
                 double u = ((y+1) / scale) + (0.5 * (1 - (1 / scale)));
                 double t = cubic((u - (double)indices[y][x] - 1) * scale);
                 weights[y][x] = scale * t;
             }
     else
         for (y = 0; y < out_size; y++)
-            for (x = 0; x < P; x++)
-            {
+            for (x = 0; x < P; x++) {
                 double u = ((y+1) / scale) + (0.5 * (1 - (1 / scale)));
                 weights[y][x] = cubic(u - (double)indices[y][x] - 1);
             }
 
-    for (y = 0; y < out_size; y++)
-    {
+    for (y = 0; y < out_size; y++) {
         double sum = 0.0;
         for (x = 0; x < P; x++) sum += weights[y][x];
         for (x = 0; x < P; x++) weights[y][x] /= sum;
@@ -508,16 +483,17 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
         for (x = 0; x < P; x++)
             indices[y][x] = aux[mod(((int) indices[y][x]),aux_size)];
 
-    for (y = 0; y < out_size; y++)
-    {
+    printf("<- out_size: %0d\n", out_size);
+    printf("<- num_non_zero: %0d\n", num_non_zero);
+    for (y = 0; y < out_size; y++) {
         int num_non_zero_t = 0;
         for (x = 0; x < P; x++)
-            if (weights[y][x] != 0.0f)
-            {
+            if (weights[y][x] != 0.0f) {
                 num_non_zero_t = num_non_zero_t + 1;
             }
         if (num_non_zero < num_non_zero_t) num_non_zero = num_non_zero_t;
     }
+    printf("num_non_zero: %0d\n", num_non_zero);
 
     CHECK_ERROR(((ind2store = (unsigned char*) malloc(P * sizeof(unsigned char*))) == NULL), "error: allocating ind2store\n")
 
@@ -530,19 +506,17 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
     CHECK_ERROR((((*out_indices) = (int **) malloc(out_size * sizeof(int*))) == NULL), "error: allocating out_indices\n")
     CHECK_ERROR((((*out_weights) = (double **) malloc(out_size * sizeof(double*))) == NULL), "error: allocating out_weights\n")
     
-    for (y = 0; y < out_size; y++)
-    {
+    for (y = 0; y < out_size; y++) {
         CHECK_ERROR((((*out_indices)[y] = (int *) malloc(num_non_zero * sizeof(int))) == NULL), "error: allocating out_indices\n")
         CHECK_ERROR((((*out_weights)[y] = (double *) malloc(num_non_zero * sizeof(double))) == NULL), "error: allocating out_weights\n")
     }
 
-    for (y = 0; y < out_size; y++)
-    {
+    //printf("[ before ] (*out_indices)[0][0]: %0d\n", (*out_indices)[0][0]);
+    for (y = 0; y < out_size; y++) {
         ind_w_ptr_x = 0;
-        for (x = 0; x < P; x++)
-        {
-            if (ind2store[x])
-            {
+//        for (x = 0; x < P; x++) { // <---- bug!
+        for (x = 0; x < num_non_zero; x++) {
+            if (ind2store[x]) {
                 (*out_indices)[y][ind_w_ptr_x] = indices[y][x];
                 (*out_weights)[y][ind_w_ptr_x] = weights[y][x];
                 ind_w_ptr_x = ind_w_ptr_x + 1;
@@ -552,8 +526,7 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
 
     *contrib_size = num_non_zero;
 
-    for (y = 0; y < out_size; y++)
-    {
+    for (y = 0; y < out_size; y++) {
         free(indices[y]);
         free(weights[y]);
     }
@@ -603,8 +576,7 @@ int rotate(ppm_image_handler *handler)
     y_offset = floor(handler->imginfo.new_height / 2) - floor(handler->imginfo.height / 2);
 
     // 0 degree rotation: no rotation, just copy the buffer
-    if (handler->angle == 0)
-    {
+    if (handler->angle == 0) {
         handler->norotate = 1;
         handler->imginfo.new_buff = handler->imginfo.buff;
         return PPM_NOERROR;
@@ -614,7 +586,7 @@ int rotate(ppm_image_handler *handler)
     // The following are the reasons  orthogonal rotations (90,
     // 180, 270) don't need to use the rotation formula:
     // 1. Prevent round-off errors
-    // 2. Faster rotation
+    // 2. Faster rotation since they are most commonly used rotations
     // 3. No need for interpolation
 
     if (handler->angle == 90) // rotate 90 degrees 
@@ -629,13 +601,11 @@ int rotate(ppm_image_handler *handler)
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
                 handler->imginfo.new_buff[handler->imginfo.new_height - y - 1][x] = handler->imginfo.buff[x][y];
-    else
-    {
+    else {
         for (y = 0; y < handler->imginfo.new_height; y++) memset(handler->imginfo.new_buff[y], 0x00, handler->imginfo.new_width * sizeof(pixel));
 
         for (y = 0; y < handler->imginfo.new_height; y++)
-            for (x = 0; x < handler->imginfo.new_width; x++)
-            {
+            for (x = 0; x < handler->imginfo.new_width; x++) {
                 int xx = x - x_offset;
                 int yy = y - y_offset;
 
@@ -649,8 +619,7 @@ int rotate(ppm_image_handler *handler)
                 nX = ((cos(angle) * (double) (x0)) + (sin(angle) * (double) (y0)) + x_center_in);
                 nY = (-(sin(angle) * (double)(x0)) + (cos(angle) * (double) (y0)) + y_center_in);
 
-                if ((round(nX) < handler->imginfo.width) && (round(nY) < handler->imginfo.height) && (round(nY) >= 0) && (round(nX) >= 0))
-                {
+                if ((round(nX) < handler->imginfo.width) && (round(nY) < handler->imginfo.height) && (round(nY) >= 0) && (round(nX) >= 0)) {
                     double q_r = 0.0f;
                     double q_g = 0.0f;
                     double q_b = 0.0f;
@@ -658,17 +627,14 @@ int rotate(ppm_image_handler *handler)
                     int i;
 
                     // no interpolation on the edges
-                    if (round(nX) > 1 && round(nY) > 1 && round(nX) < handler->imginfo.width - 2 && round(nY) < handler->imginfo.height - 2)
-                    {
-                        for (j = 0; j < 4; j++) 
-                        {
+                    if (round(nX) > 1 && round(nY) > 1 && round(nX) < handler->imginfo.width - 2 && round(nY) < handler->imginfo.height - 2) {
+                        for (j = 0; j < 4; j++) {
                             int v;
                             v = floor(nY) - 1 + j;
                             double p_r = 0.0f;
                             double p_g = 0.0f;
                             double p_b = 0.0f;
-                            for (i = 0; i < 4; i++)
-                            {
+                            for (i = 0; i < 4; i++) {
                                 int u;
                                 u = floor(nX) - 1 + i;
                                 p_r += (handler->imginfo.buff[v][u].r * cubic(nX - u));
@@ -707,22 +673,19 @@ int imresize(ppm_image_handler *handler, int out_size, int dim, double **weights
     int y;
     int z;
     
-    if (dim == 0) // scale height
-    {
+    if (dim == 0) { // scale height
         handler->imginfo.new_height = out_size;
         handler->imginfo.new_width = handler->imginfo.width;
 
         if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.width) == PPM_ERROR) return PPM_ERROR;
   
         for (y = 0; y < handler->imginfo.new_height; y++)
-            for (x = 0; x < handler->imginfo.new_width; x++)
-            {
+            for (x = 0; x < handler->imginfo.new_width; x++) {
                 double sum_r = 0.0f;
                 double sum_g = 0.0f;
                 double sum_b = 0.0f;
 
-                for (z = 0; z < weights_sz; z++)
-                {
+                for (z = 0; z < weights_sz; z++) {
                     sum_r = sum_r + (handler->imginfo.buff[indices[y][z]][x].r * weights[y][z]);
                     sum_g = sum_g + (handler->imginfo.buff[indices[y][z]][x].g * weights[y][z]);
                     sum_b = sum_b + (handler->imginfo.buff[indices[y][z]][x].b * weights[y][z]);
@@ -736,25 +699,23 @@ int imresize(ppm_image_handler *handler, int out_size, int dim, double **weights
                 handler->imginfo.new_buff[y][x].b = (sum_b < 0.0f) ? 0.0f : (sum_b >= 256) ? 255.0f : (int) sum_b;
             }
     }
-    else // scale width
-    {
+    else { // scale width
         handler->imginfo.new_height = handler->imginfo.height;
         handler->imginfo.new_width = out_size;
 
         if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == PPM_ERROR) return PPM_ERROR;
   
         for (y = 0; y < handler->imginfo.new_height; y++)
-            for (x = 0; x < handler->imginfo.new_width; x++)
-            {
+            for (x = 0; x < handler->imginfo.new_width; x++) {
                 double sum_r = 0.0f;
                 double sum_g = 0.0f;
                 double sum_b = 0.0f;
 
-                for (z = 0; z < weights_sz; z++)
-                {
-                    sum_r = sum_r + handler->imginfo.buff[y][indices[x][z]].r * weights[x][z];
-                    sum_g = sum_g + handler->imginfo.buff[y][indices[x][z]].g * weights[x][z];
-                    sum_b = sum_b + handler->imginfo.buff[y][indices[x][z]].b * weights[x][z];
+                for (z = 0; z < weights_sz; z++) {
+                    int index = indices[x][z];
+                    sum_r = sum_r + handler->imginfo.buff[y][index].r * weights[x][z];
+                    sum_g = sum_g + handler->imginfo.buff[y][index].g * weights[x][z];
+                    sum_b = sum_b + handler->imginfo.buff[y][index].b * weights[x][z];
                 }
 
                 sum_r = round(sum_r);
@@ -784,16 +745,14 @@ int flip(ppm_image_handler *handler, unsigned char flip_direction)
 
     if (flip_direction) // flip vertical
         for (y = 0; y < handler->imginfo.new_height/2; y++)
-            for (x = 0; x < handler->imginfo.new_width; x++)
-            {
+            for (x = 0; x < handler->imginfo.new_width; x++) {
                 pixel tmp = handler->imginfo.new_buff[y][x];
                 handler->imginfo.new_buff[y][x] = handler->imginfo.new_buff[((handler->imginfo.new_height)-1) - y][x];
                 handler->imginfo.new_buff[((handler->imginfo.new_height)-1) - y][x] = tmp;
             }
     else
         for (y = 0; y < handler->imginfo.new_height; y++)
-            for (x = 0; x < handler->imginfo.new_width/2; x++)
-            {
+            for (x = 0; x < handler->imginfo.new_width/2; x++) {
                 pixel tmp = handler->imginfo.new_buff[y][x];
                 handler->imginfo.new_buff[y][x] = handler->imginfo.new_buff[y][((handler->imginfo.new_width)-1)-x];
                 handler->imginfo.new_buff[y][((handler->imginfo.new_width)-1) - x] = tmp;
@@ -807,8 +766,7 @@ int image_buff_alloc(pixel ***new_buff, unsigned int height, unsigned int width)
 
     CHECK_ERROR((((*new_buff) = (pixel **) malloc(height * sizeof(pixel *))) == NULL), "can not allocate image buff for height\n")
 
-    for (y = 0; y < height; y++)
-    {
+    for (y = 0; y < height; y++) {
         CHECK_ERROR((((*new_buff)[y] = (pixel *) malloc(width * sizeof(pixel))) == NULL), "can not allocate image buff for width\n")
         memset((*new_buff)[y], 0x00, width * sizeof(pixel));
     }
@@ -816,7 +774,7 @@ int image_buff_alloc(pixel ***new_buff, unsigned int height, unsigned int width)
     return PPM_NOERROR;
 }
 
-int mono(ppm_image_handler *handler) // TODO: should return error
+int mono(ppm_image_handler *handler)
 {
     int x;
     int y;
@@ -830,15 +788,12 @@ int mono(ppm_image_handler *handler) // TODO: should return error
     if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == PPM_ERROR) return PPM_ERROR;
 
 // bayer 4x4  
-// ------------------------------------------------------------------------------------------------------------------------------------------------------
     for (y = 0; y < handler->imginfo.new_height; y++)
-        for (x = 0; x < handler->imginfo.new_width; x++)
-        {
+        for (x = 0; x < handler->imginfo.new_width; x++) {
             unsigned char oldpixel = (handler->imginfo.buff[y][x].r + handler->imginfo.buff[y][x].g + handler->imginfo.buff[y][x].b) / 3;
             if (oldpixel >= matrix[(x % 4) * 4 + (y % 4)] * 255) handler->imginfo.new_buff[y][x].r = 0;
             else handler->imginfo.new_buff[y][x].r = 1;
         }
-// ------------------------------------------------------------------------------------------------------------------------------------------------------
     return PPM_NOERROR;
 }
 
@@ -891,8 +846,7 @@ int doProcessPPM(ppm_image_handler *handler)
     handler->tkn.current_char = '\n';
 
     // get header file information
-    if (getImageInfo(handler) != PPM_NOERROR)
-    {
+    if (getImageInfo(handler) != PPM_NOERROR) {
         free(handler->file_buffer);
         fclose(handler->filep);
         return PPM_ERROR;
@@ -900,13 +854,12 @@ int doProcessPPM(ppm_image_handler *handler)
   
     handler->imginfo.new_buff = NULL;
 
-    if (handler->arg_flag.resize_enable)
-    {
-        double **weights[2];
-        int **indices[2];
-        int weights_sz[2];
-        int im_sz[2];
-        double scale[2];
+    if (handler->arg_flag.resize_enable) {
+        double **weights[2] = {NULL, NULL};
+        int **indices[2] = {NULL, NULL};
+        int weights_sz[2] = {0, 0};
+        int im_sz[2] = {0, 0};
+        double scale[2] = {0, 0};
         int order[2] = {0,0};
         int x, y;
         int out_width;
@@ -921,71 +874,91 @@ int doProcessPPM(ppm_image_handler *handler)
         if (scale[0] < scale[1]) order[1] = 1;
         else order[0] = 1;
 
+        indices[0] = NULL;
+        indices[1] = NULL;
         if (calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &weights[0], &indices[0], &weights_sz[0]) == PPM_ERROR) return PPM_ERROR;
         if (calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &weights[1], &indices[1], &weights_sz[1]) == PPM_ERROR) return PPM_ERROR;
+        printf("weights_sz[0]: %0d\n", weights_sz[0]);
+        printf("weights_sz[1]: %0d\n", weights_sz[1]);
+
+        //if (calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &weights0, &indices0, &weights_sz[0]) == PPM_ERROR) return PPM_ERROR;
+        //if (calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &weights1, &indices1, &weights_sz[1]) == PPM_ERROR) return PPM_ERROR;
 
         im_sz[0] = handler->imginfo.new_height;
         im_sz[1] = handler->imginfo.new_width;
 
         out_width = handler->imginfo.new_width;
         dim = order[0];
-        if ((imresize(handler, im_sz[dim], dim, weights[dim], indices[dim], weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
+        if ((imresize(handler, im_sz[dim], dim, weights[0], indices[0], weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
+        //if ((imresize(handler, im_sz[dim], dim, weights0, indices0, weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
         releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
         handler->imginfo.buff = handler->imginfo.new_buff;
         handler->imginfo.new_width = out_width;
         handler->imginfo.height = handler->imginfo.new_height;
         handler->imginfo.width = handler->imginfo.new_width;
         dim = order[1];
-        if ((imresize(handler, im_sz[dim], dim, weights[dim], indices[dim], weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
+        if ((imresize(handler, im_sz[dim], dim, weights[1], indices[1], weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
+        //if ((imresize(handler, im_sz[dim], dim, weights1, indices1, weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
 
-        for (x = 0; x < 2; x++)
-        {
-            for (y = 0; y < im_sz[x]; y++)
-            {
+        for (x = 0; x < 2; x++) {
+            for (y = 0; y < im_sz[x]; y++) {
                 free((weights[x])[y]);
                 free((indices[x])[y]);
             }
             free(weights[x]);
             free(indices[x]);
         }
+
+        //for (y = 0; y < im_sz[x]; y++) {
+        //    free(weights0[y]);
+        //}
+        //free(weights0);
+        //
+        //for (y = 0; y < im_sz[x]; y++) {
+        //    free((weights1)[y]);
+        //}
+        //free(weights1);
+        //
+        //for (y = 0; y < im_sz[x]; y++) {
+        //    free((indices0)[y]);
+        //}
+        //free(indices0);
+        //for (y = 0; y < im_sz[x]; y++) {
+        //    free((indices1)[y]);
+        //}
+        //free(indices1);
     }
 
-    if (handler->arg_flag.rotate_enable)
-    {
+    if (handler->arg_flag.rotate_enable) {
         if (handler->arg_flag.resize_enable) renewBuffer(handler);
         rotate(handler);
     }
 
-    if (handler->arg_flag.gray_enable)
-    {
+    if (handler->arg_flag.gray_enable) {
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) renewBuffer(handler);
         gray(handler);
     }
         
-    if (handler->arg_flag.mono_enable)
-    {
+    if (handler->arg_flag.mono_enable) {
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) renewBuffer(handler);
         mono(handler);
     }
 
-    if (handler->arg_flag.flipv_enable)
-    {
+    if (handler->arg_flag.flipv_enable) {
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable)  renewBuffer(handler);
         flip(handler,1);
     }
         
-    if (handler->arg_flag.fliph_enable)
-    {
+    if (handler->arg_flag.fliph_enable) {
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) renewBuffer(handler);
         flip(handler,0);
     }
         
     // write the processed image to file
-    if (putImageToFile(handler) != PPM_NOERROR)
-    {
+    if (putImageToFile(handler) != PPM_NOERROR) {
+        releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
         free(handler->file_buffer);
         fclose(handler->filep);
-        releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
         return PPM_ERROR;
     }
 
