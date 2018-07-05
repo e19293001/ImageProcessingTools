@@ -891,7 +891,7 @@ int doProcessPPM(ppm_image_handler *handler)
     handler->tkn.current_char = '\n';
 
     // get header file information
-    if (getImageInfo(handler) != 0)
+    if (getImageInfo(handler) != PPM_NOERROR)
     {
         free(handler->file_buffer);
         fclose(handler->filep);
@@ -981,7 +981,7 @@ int doProcessPPM(ppm_image_handler *handler)
     }
         
     // write the processed image to file
-    if (putImageToFile(handler) != 0)
+    if (putImageToFile(handler) != PPM_NOERROR)
     {
         free(handler->file_buffer);
         fclose(handler->filep);
