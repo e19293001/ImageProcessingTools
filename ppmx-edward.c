@@ -81,7 +81,14 @@ typedef struct ppm_image_handler {
     char norotate;
 } ppm_image_handler;
 
-int calc_contributions(int in_size, int out_size, double scale, double k_width, double ***out_weights, int ***out_indices, int *contrib_size);
+typedef struct contributions {
+    double **weights;
+    int **indices;
+} contributions;
+
+
+//int calc_contributions(int in_size, int out_size, double scale, double k_width, double ***out_weights, int ***out_indices, int *contrib_size);
+int calc_contributions(int in_size, int out_size, double scale, double k_width, contributions *contrib, int *contrib_size);
 int mod(int a, int b);
 double cubic(double x);
 int getNextToken(ppm_image_handler *handler, token *current_token);
@@ -412,7 +419,8 @@ int mod(int a, int b)
     return r < 0 ? r + b : r;
 }
 
-int calc_contributions(int in_size, int out_size, double scale, double k_width, double ***out_weights, int ***out_indices, int *contrib_size)
+//int calc_contributions(int in_size, int out_size, double scale, double k_width, double ***out_weights, int ***out_indices, int *contrib_size)
+int calc_contributions(int in_size, int out_size, double scale, double k_width, contributions *contrib, int *contrib_size)
 {
     int x = 0;
     int y = 0;
@@ -423,7 +431,10 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
     int P = 0;
     int num_non_zero = 0;
     int ind_w_ptr_x = 0;
+    int ind_w_ptr_y = 0;
     unsigned char *ind2store;
+    double **for_outweights;
+    int **for_outindices;
 
     if (scale < 1.0) k_width = k_width / scale;
 
@@ -460,18 +471,21 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
 
     // generate weights
     if (scale < 1.0)
-        for (y = 0; y < out_size; y++)
+        for (y = 0; y < out_size; y++) {
             for (x = 0; x < P; x++) {
                 double u = ((y+1) / scale) + (0.5 * (1 - (1 / scale)));
                 double t = cubic((u - (double)indices[y][x] - 1) * scale);
                 weights[y][x] = scale * t;
             }
-    else
-        for (y = 0; y < out_size; y++)
+        }
+    else {
+        for (y = 0; y < out_size; y++) {
             for (x = 0; x < P; x++) {
                 double u = ((y+1) / scale) + (0.5 * (1 - (1 / scale)));
                 weights[y][x] = cubic(u - (double)indices[y][x] - 1);
             }
+        }
+    }
 
     for (y = 0; y < out_size; y++) {
         double sum = 0.0;
@@ -483,48 +497,75 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
         for (x = 0; x < P; x++)
             indices[y][x] = aux[mod(((int) indices[y][x]),aux_size)];
 
+    printf("aux_size: %0d\n", aux_size);
+    printf("<- in_size: %0d\n", in_size);
     printf("<- out_size: %0d\n", out_size);
     printf("<- num_non_zero: %0d\n", num_non_zero);
     for (y = 0; y < out_size; y++) {
         int num_non_zero_t = 0;
-        for (x = 0; x < P; x++)
+        for (x = 0; x < P; x++) {
             if (weights[y][x] != 0.0f) {
                 num_non_zero_t = num_non_zero_t + 1;
             }
+        }
         if (num_non_zero < num_non_zero_t) num_non_zero = num_non_zero_t;
     }
-    printf("num_non_zero: %0d\n", num_non_zero);
+//    printf("num_non_zero: %0d\n", num_non_zero);
 
     CHECK_ERROR(((ind2store = (unsigned char*) malloc(P * sizeof(unsigned char*))) == NULL), "error: allocating ind2store\n")
 
     for (x = 0; x < P; x++) ind2store[x] = 0;
 
-    for (y = 0; y < out_size; y++)
-        for (x = 0; x < P; x++)
-            if (weights[y][x] != 0.0f) ind2store[x] = 1;
-
-    CHECK_ERROR((((*out_indices) = (int **) malloc(out_size * sizeof(int*))) == NULL), "error: allocating out_indices\n")
-    CHECK_ERROR((((*out_weights) = (double **) malloc(out_size * sizeof(double*))) == NULL), "error: allocating out_weights\n")
-    
     for (y = 0; y < out_size; y++) {
-        CHECK_ERROR((((*out_indices)[y] = (int *) malloc(num_non_zero * sizeof(int))) == NULL), "error: allocating out_indices\n")
-        CHECK_ERROR((((*out_weights)[y] = (double *) malloc(num_non_zero * sizeof(double))) == NULL), "error: allocating out_weights\n")
+        for (x = 0; x < P; x++) {
+            if (weights[y][x] != 0.0f) {
+//                printf("-- %0d -- %0.2f -- ", x, weights[y][x]);
+                ind2store[x] = 1;
+            }
+        }
+//        printf("\n");
     }
 
-    //printf("[ before ] (*out_indices)[0][0]: %0d\n", (*out_indices)[0][0]);
+    CHECK_ERROR(((for_outindices = (int **) malloc(out_size * sizeof(int*))) == NULL), "error: allocating out_indices\n")
+    CHECK_ERROR(((for_outweights = (double **) malloc(out_size * sizeof(double*))) == NULL), "error: allocating out_weights\n")
+    
+    for (y = 0; y < out_size; y++) {
+        CHECK_ERROR(((for_outindices[y] = (int *) malloc(num_non_zero * sizeof(int))) == NULL), "error: allocating out_indices\n")
+        memset(for_outindices[y], 0, num_non_zero * sizeof(int));
+        CHECK_ERROR(((for_outweights[y] = (double *) malloc(num_non_zero * sizeof(double))) == NULL), "error: allocating out_weights\n")
+        memset(for_outweights[y], 0, num_non_zero * sizeof(double));
+    }
+//    printf("created size for out_indices: %0dx%0d\n", num_non_zero, out_size);
+
+    //printf("[ before ] for_outindices[0][0]: %0d\n", for_outindices[0][0]);
     for (y = 0; y < out_size; y++) {
         ind_w_ptr_x = 0;
-//        for (x = 0; x < P; x++) { // <---- bug!
+        ind_w_ptr_y = 0;
+        //for (x = 0; x < P; x++) { // <---- bug!
         for (x = 0; x < num_non_zero; x++) {
             if (ind2store[x]) {
-                (*out_indices)[y][ind_w_ptr_x] = indices[y][x];
-                (*out_weights)[y][ind_w_ptr_x] = weights[y][x];
+                for_outindices[y][ind_w_ptr_x] = indices[y][x];
+                for_outweights[y][ind_w_ptr_x] = weights[y][x];
                 ind_w_ptr_x = ind_w_ptr_x + 1;
+                ind_w_ptr_y = ind_w_ptr_y + 1;
             }
         }
     }
 
+
+
     *contrib_size = num_non_zero;
+    contrib->indices = for_outindices;
+    contrib->weights = for_outweights;
+        
+    //for (x = 0; x < out_size; x++) {
+    //    for (y = 0; y < num_non_zero; y++) {
+    //        //printf("%0d ", contrib->indices[x][y]);
+    //        printf("%0d ", for_outindices[x][y]);
+    //    }
+    //    printf("\n");
+    //}
+
 
     for (y = 0; y < out_size; y++) {
         free(indices[y]);
@@ -713,10 +754,12 @@ int imresize(ppm_image_handler *handler, int out_size, int dim, double **weights
 
                 for (z = 0; z < weights_sz; z++) {
                     int index = indices[x][z];
+                    //printf("index: %0d weights: %0f\n", index, weights[x][z]);
                     sum_r = sum_r + handler->imginfo.buff[y][index].r * weights[x][z];
                     sum_g = sum_g + handler->imginfo.buff[y][index].g * weights[x][z];
                     sum_b = sum_b + handler->imginfo.buff[y][index].b * weights[x][z];
                 }
+                //printf("\n");
 
                 sum_r = round(sum_r);
                 sum_g = round(sum_g);
@@ -864,6 +907,7 @@ int doProcessPPM(ppm_image_handler *handler)
         int x, y;
         int out_width;
         int dim;
+        contributions contrib[2];
 
         CHECK_ERROR(((int) (handler->imginfo.new_width = handler->output_width_size) < 1), "invalid option for new width\n")
 
@@ -876,37 +920,50 @@ int doProcessPPM(ppm_image_handler *handler)
 
         indices[0] = NULL;
         indices[1] = NULL;
-        if (calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &weights[0], &indices[0], &weights_sz[0]) == PPM_ERROR) return PPM_ERROR;
-        if (calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &weights[1], &indices[1], &weights_sz[1]) == PPM_ERROR) return PPM_ERROR;
+        //if (calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &weights[0], &indices[0], &weights_sz[0]) == PPM_ERROR) return PPM_ERROR;
+        //if (calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &weights[1], &indices[1], &weights_sz[1]) == PPM_ERROR) return PPM_ERROR;
+        if (calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &contrib[0], &weights_sz[0]) == PPM_ERROR) return PPM_ERROR;
+        if (calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &contrib[1], &weights_sz[1]) == PPM_ERROR) return PPM_ERROR;
+
+        printf("width: %0d\n", handler->imginfo.width);
+        printf("height: %0d\n", handler->imginfo.height);
+        printf("new_width: %0d\n", handler->imginfo.new_width);
+        printf("new_height: %0d\n", handler->imginfo.new_height);
+
         printf("weights_sz[0]: %0d\n", weights_sz[0]);
         printf("weights_sz[1]: %0d\n", weights_sz[1]);
 
-        //if (calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &weights0, &indices0, &weights_sz[0]) == PPM_ERROR) return PPM_ERROR;
-        //if (calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &weights1, &indices1, &weights_sz[1]) == PPM_ERROR) return PPM_ERROR;
+        //for (x = 0; x < handler->imginfo.new_width; x++) {
+        //    for (y = 0; y < weights_sz[1]; y++) {
+        //        printf("%0d ", contrib[1].indices[x][y]);
+        //    }
+        //    printf("\n");
+        //}
 
         im_sz[0] = handler->imginfo.new_height;
         im_sz[1] = handler->imginfo.new_width;
 
         out_width = handler->imginfo.new_width;
         dim = order[0];
-        if ((imresize(handler, im_sz[dim], dim, weights[0], indices[0], weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
-        //if ((imresize(handler, im_sz[dim], dim, weights0, indices0, weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
+        //if ((imresize(handler, im_sz[dim], dim, weights[0], indices[0], weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
+        if ((imresize(handler, im_sz[dim], dim, contrib[dim].weights, contrib[dim].indices, weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
         releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
         handler->imginfo.buff = handler->imginfo.new_buff;
         handler->imginfo.new_width = out_width;
         handler->imginfo.height = handler->imginfo.new_height;
         handler->imginfo.width = handler->imginfo.new_width;
         dim = order[1];
-        if ((imresize(handler, im_sz[dim], dim, weights[1], indices[1], weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
-        //if ((imresize(handler, im_sz[dim], dim, weights1, indices1, weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
+        //if ((imresize(handler, im_sz[dim], dim, weights[1], indices[1], weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
+        if ((imresize(handler, im_sz[dim], dim, contrib[dim].weights, contrib[dim].indices, weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
+        //if ((imresize(handler, im_sz[dim], dim, weights[1], indices1, weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
 
         for (x = 0; x < 2; x++) {
             for (y = 0; y < im_sz[x]; y++) {
-                free((weights[x])[y]);
-                free((indices[x])[y]);
+                free(contrib[x].weights[y]);
+                free(contrib[x].indices[y]);
             }
-            free(weights[x]);
-            free(indices[x]);
+            free(contrib[x].weights);
+            free(contrib[x].indices);
         }
 
         //for (y = 0; y < im_sz[x]; y++) {
