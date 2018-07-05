@@ -25,6 +25,13 @@
 // visual studio 2010 does not include round() in math.h
 #define round(val) floor(val + 0.5)
 
+#define CHECK_ERROR(condition, message) \
+	if (condition) \
+	{ \
+		printf(message); \
+		return PPM_ERROR; \
+	} 
+
 typedef struct pixel {
     unsigned char r;
     unsigned char g;
@@ -95,14 +102,25 @@ int main(int argc, char *argv[])
 {
 	ppm_image_handler handler;
 	int x;
+	int filename_flag = 0;
 
     memset(&handler, 0, sizeof(ppm_image_handler));
 
 	for (x = 1; x < argc; x++)
 		if (argv[x][0] == '-')
 			if (argv[x][1] == 'f')
-				if (argv[x][2] == 'h') handler.arg_flag.fliph_enable = 1;
-				else if (argv[x][2] == 'v') handler.arg_flag.flipv_enable = 1;
+				if (argv[x][2] == 'h') 
+				{
+					CHECK_ERROR(handler.arg_flag.fliph_enable, "Error: Duplicate options not allowed\n")
+					CHECK_ERROR(handler.arg_flag.flipv_enable, "Error: Conflicting options not allowed\n")
+					handler.arg_flag.fliph_enable = 1;
+				}
+				else if (argv[x][2] == 'v') 
+				{
+					CHECK_ERROR(handler.arg_flag.flipv_enable, "Error: Duplicate options not allowed\n")
+					CHECK_ERROR(handler.arg_flag.fliph_enable, "Error: Conflicting options not allowed\n")
+					handler.arg_flag.flipv_enable = 1;
+				}
 				else
 				{
 					printf("Error: invalid option for flip.\nallowed options are -fh -fv only.\n");
@@ -110,29 +128,47 @@ int main(int argc, char *argv[])
 				}
 			else if (argv[x][1] == 'w')
 			{
+				int index = 2;
+				while (argv[x][index] != 0)	CHECK_ERROR(isalpha(argv[x][index++]), "Error: invalid option for scaling.\n")
+				CHECK_ERROR(handler.arg_flag.resize_enable, "Error: Duplicate options not allowed\n")
 				handler.arg_flag.resize_enable = 1;
 				handler.output_width_size = (int) atoi(&argv[x][2]);
 			}
 			else if (argv[x][1] == 'r')
 			{
+				int index = 2;
+				CHECK_ERROR((argv[x][2] == 0), "Error: invalid option for rotate\n")
+				CHECK_ERROR(handler.arg_flag.rotate_enable, "Error: Duplicate options not allowed\n")
 				handler.arg_flag.rotate_enable = 1;
+				while (argv[x][index] != 0)	CHECK_ERROR(isalpha(argv[x][index++]), "Error: invalid option for rotate.\n")
 				handler.angle = (double) atoi(&argv[x][2]);
-                if (handler.angle < 0 || handler.angle >= 360)
-                {
-                    printf("Error: invalid option for rotate: %0f. it is less than 0 or greater than 359\n", handler.angle);
-                    return PPM_ERROR;
-                }
+                CHECK_ERROR(handler.angle < 0 || handler.angle >= 360, "Error: invalid option for rotate.\n")
 			}
-            else if (strcmp(&argv[x][1], "gray") == 0) handler.arg_flag.gray_enable = 1;
-			else if (strcmp(&argv[x][1], "mono") == 0) handler.arg_flag.mono_enable = 1;
+            else if (strcmp(&argv[x][1], "gray") == 0) 
+			{
+				CHECK_ERROR(handler.arg_flag.gray_enable, "Error: Duplicate options not allowed\n")
+				CHECK_ERROR(handler.arg_flag.mono_enable, "Error: Conflicting options not allowed\n")
+				handler.arg_flag.gray_enable = 1;
+			}
+			else if (strcmp(&argv[x][1], "mono") == 0) 
+			{
+				CHECK_ERROR(handler.arg_flag.mono_enable, "Error: Duplicate options not allowed\n")
+				CHECK_ERROR(handler.arg_flag.gray_enable, "Error: Conflicting options not allowed\n")
+				handler.arg_flag.mono_enable = 1;
+			}
             else
             {
                 printf("Error: invalid option: %s\n", &argv[x][1]);
                 usage();
                 return PPM_ERROR;
             }
-		else handler.filename = &argv[x][0];
-	if (handler.filename == NULL)
+		else 
+		{
+			CHECK_ERROR(filename_flag, "Error: invalid options\n");
+			handler.filename = &argv[x][0];
+			filename_flag = 1;
+		}
+	if (handler.filename == NULL || filename_flag == 0)
 	{
 		usage();
         return PPM_ERROR;
@@ -168,83 +204,43 @@ int putImageToFile(ppm_image_handler *handler)
     strncpy(fileout, handler->filename, fileout_size);
     strcat(fileout, ".out");
 
-    if (handler->imginfo.new_buff == NULL)
-    {
-        printf("Error: no data to write\n");
-        return PPM_ERROR;
-    }
+    CHECK_ERROR(handler->imginfo.new_buff == NULL, "Error: no data to write\n")
 
-    if ((fofp = fopen(fileout, "wb")) == NULL)
-    {
-        printf("Error: unable to open file for writing: %s\n", fileout);
-        return PPM_ERROR;
-    }
+    CHECK_ERROR((fofp = fopen(fileout, "wb")) == NULL, "Error: unable to open file for writing\n")
 
     if (handler->imginfo.file_type == FILETYPE_PGM)
     {
-        if ((fwrite("P5\n", 1, 3, fofp)) != 3)
-        {
-            printf("Error: failed in writing to %s\n", fileout);
-            return PPM_ERROR;
-        }
+        CHECK_ERROR((fwrite("P5\n", 1, 3, fofp)) != 3, "Error: failed in writing to file\n")
     }
     else if (handler->imginfo.file_type == FILETYPE_PBM)
     {
-        if ((fwrite("P4\n", 1, 3, fofp)) != 3)
-        {
-            printf("Error: failed in writing to %s\n", fileout);
-            return PPM_ERROR;
-        }
+        CHECK_ERROR((fwrite("P4\n", 1, 3, fofp)) != 3, "Error: failed in writing to file\n")
     }
     else
     {
-        if ((fwrite("P6\n", 1, 3, fofp)) != 3)
-        {
-            printf("Error: failed in writing to %s\n", fileout);
-            return PPM_ERROR;
-        }
+        CHECK_ERROR((fwrite("P6\n", 1, 3, fofp)) != 3, "Error: failed in writing to file\n")
     }
 
     sprintf(fileout, "%s", "# generated by ppmx_edward\n");
-    if ((fwrite(fileout, 1, strlen(fileout), fofp)) != strlen(fileout))
-    {
-        printf("Error: failed in writing to %s\n", fileout);
-        return PPM_ERROR;
-    }
+    CHECK_ERROR(((fwrite(fileout, 1, strlen(fileout), fofp)) != strlen(fileout)), "Error: failed in writing to file\n")
 
     sprintf(fileout, "%u ", handler->imginfo.new_width);
-    if ((fwrite(fileout, 1, strlen(fileout), fofp)) != strlen(fileout))
-    {
-        printf("Error: failed in writing to %s\n", fileout);
-        return PPM_ERROR;
-    }
+    CHECK_ERROR(((fwrite(fileout, 1, strlen(fileout), fofp)) != strlen(fileout)), "Error: failed in writing to file\n")
 
     sprintf(fileout, "%u\n", handler->imginfo.new_height);
-    if ((fwrite(fileout, 1, strlen(fileout), fofp)) != strlen(fileout))
-    {
-        printf("Error: failed in writing to %s\n", fileout);
-        return PPM_ERROR;
-    }
+    CHECK_ERROR(((fwrite(fileout, 1, strlen(fileout), fofp)) != strlen(fileout)), "Error: failed in writing to file\n")
 
     if (!(handler->imginfo.file_type == FILETYPE_PBM))
     {
         sprintf(fileout, "%u\n", handler->imginfo.max_color);
-        if ((fwrite(fileout, 1, strlen(fileout), fofp)) != strlen(fileout))
-        {
-            printf("Error: failed in writing to %s\n", fileout);
-            return PPM_ERROR;
-        }
+        CHECK_ERROR(((fwrite(fileout, 1, strlen(fileout), fofp)) != strlen(fileout)), "Error: failed in writing to file\n")
     }
 
     if (handler->imginfo.file_type == FILETYPE_PGM)
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
             {
-                if ((fwrite(&handler->imginfo.new_buff[y][x].r,1, 1, fofp)) != 1)
-                {
-                    printf("Error: failed in writing to %s\n", fileout);
-                    return PPM_ERROR;
-                }
+                CHECK_ERROR(((fwrite(&handler->imginfo.new_buff[y][x].r,1, 1, fofp)) != 1), "Error: failed in writing to file\n")
             }
     else if (handler->imginfo.file_type == FILETYPE_PBM)
     {
@@ -257,42 +253,24 @@ int putImageToFile(ppm_image_handler *handler)
                 z = z | (handler->imginfo.new_buff[y][x].r << (8 - tmp));
                 if (tmp % 8 == 0)
                 {
-                    if ((fwrite(&z,1, 1, fofp)) != 1)
-                    {
-                        printf("Error: failed in writing to %s\n", fileout);
-                        return PPM_ERROR;
-                    }
+                    CHECK_ERROR(((fwrite(&z,1, 1, fofp)) != 1), "Error: failed in writing to file\n")
                     tmp = 0;
                     z = 0;
                 }
             }
             if (tmp-1 != 0)
-                if ((fwrite(&z,1, 1, fofp)) != 1)
-                {
-                    printf("Error: failed in writing to %s\n", fileout);
-                    return PPM_ERROR;
-                }
+			{
+                CHECK_ERROR(((fwrite(&z,1, 1, fofp)) != 1), "Error: failed in writing to file\n")
+			}
         }
     }
     else
         for (y = 0; y < handler->imginfo.new_height; y++)
             for (x = 0; x < handler->imginfo.new_width; x++)
             {
-                if ((fwrite(&handler->imginfo.new_buff[y][x].r,1, 1, fofp)) != 1)
-                {
-                    printf("Error: failed in writing to %s\n", fileout);
-                    return PPM_ERROR;
-                }
-                if ((fwrite(&handler->imginfo.new_buff[y][x].g,1, 1, fofp)) != 1)
-                {
-                    printf("Error: failed in writing to %s\n", fileout);
-                    return PPM_ERROR;
-                }
-                if ((fwrite(&handler->imginfo.new_buff[y][x].b,1, 1, fofp)) != 1)
-                {
-                    printf("Error: failed in writing to %s\n", fileout);
-                    return PPM_ERROR;
-                }
+                CHECK_ERROR(((fwrite(&handler->imginfo.new_buff[y][x].r,1, 1, fofp)) != 1), "Error: failed in writing to file\n")
+                CHECK_ERROR(((fwrite(&handler->imginfo.new_buff[y][x].g,1, 1, fofp)) != 1), "Error: failed in writing to file\n")
+                CHECK_ERROR(((fwrite(&handler->imginfo.new_buff[y][x].b,1, 1, fofp)) != 1), "Error: failed in writing to file\n")
             }
 
     for (y = 0; y < handler->imginfo.new_height; y++)
@@ -307,11 +285,7 @@ int putImageToFile(ppm_image_handler *handler)
 
 int getNextPixel(ppm_image_handler *handler, pixel *pix)
 {
-    if (handler->index_buffer > handler->filesize)
-    {
-        printf("Error: unexpected end of file. file index: %0d exceeds file size: %0d\n", handler->index_buffer, handler->filesize);
-        return PPM_ERROR;
-    }
+    CHECK_ERROR((handler->index_buffer > handler->filesize), "Error: unexpected end of file.\n")
     (*pix).r = handler->file_buffer[handler->index_buffer++];
     (*pix).g = handler->file_buffer[handler->index_buffer++];
     (*pix).b = handler->file_buffer[handler->index_buffer++];
@@ -384,24 +358,13 @@ int getImageInfo(ppm_image_handler *handler)
     unsigned int y;
 
     // retrieve the magic number
-    if (getNextToken(handler, &current_token) != PPM_NOERROR)
-    {
-        printf("error in getting next token. wrong format.\n");
-        return PPM_ERROR;
-    }
-    if (current_token.kind != PPM_MAGIC_NUM)
-    {
-        printf("error. invalid file format.\n");
-        return PPM_ERROR;
-    }
+    CHECK_ERROR((getNextToken(handler, &current_token) != PPM_NOERROR), "error in getting next token. wrong format.\n")
+    CHECK_ERROR((current_token.kind != PPM_MAGIC_NUM), "error. invalid file format.\n")
     handler->imginfo.file_type = FILETYPE_PPM;
 
     // retrieve the width
-    if (getNextToken(handler, &current_token) != PPM_NOERROR)
-    {
-        printf("error in getting next token. wrong format.\n");
-        return PPM_ERROR;
-    }
+    CHECK_ERROR((getNextToken(handler, &current_token) != PPM_NOERROR), "error in getting next token. wrong format.\n")
+
     if (current_token.kind != PPM_UNSIGNED)
     {
         printf("error. invalid file format. unable to parse width from input file.\n");
@@ -410,58 +373,31 @@ int getImageInfo(ppm_image_handler *handler)
     handler->imginfo.width = atoi(current_token.data);
 
     // retrieve the height
-    if (getNextToken(handler, &current_token) != PPM_NOERROR)
-    {
-        printf("error in getting next token. wrong format.\n");
-        return PPM_ERROR;
-    }
-    if (current_token.kind != PPM_UNSIGNED)
-    {
-        printf("error. invalid file format. unable to parse height from input file.\n");
-        return PPM_ERROR;
-    }
+    CHECK_ERROR((getNextToken(handler, &current_token) != PPM_NOERROR), "error in getting next token. wrong format.\n")
+
+    CHECK_ERROR((current_token.kind != PPM_UNSIGNED), "error. invalid file format. unable to parse height from input file.\n")
     handler->imginfo.height = atoi(current_token.data);
 
     // retrieve the maximum color
-    if (getNextToken(handler, &current_token) != PPM_NOERROR)
-    {
-        printf("error in getting next token. wrong format.\n");
-        return PPM_ERROR;
-    }
-    if (current_token.kind != PPM_UNSIGNED)
-    {
-        printf("error. invalid file format. unable to parse maximum color from input file.\n");
-        return PPM_ERROR;
-    }
+    CHECK_ERROR((getNextToken(handler, &current_token) != PPM_NOERROR), "error in getting next token. wrong format.\n")
+    CHECK_ERROR((current_token.kind != PPM_UNSIGNED), "error. invalid file format. unable to parse maximum color from input file.\n")
     handler->imginfo.max_color = atoi(current_token.data);
   
     handler->imginfo.buff = (pixel **) malloc(handler->imginfo.height * sizeof(pixel *));
-    if (handler->imginfo.buff == NULL)
-    {
-        printf("error. can not allocate memory\n");
-        return PPM_ERROR;
-    }
+    CHECK_ERROR((handler->imginfo.buff == NULL), "error. can not allocate memory\n")
   
     handler->imginfo.size = handler->imginfo.height * handler->imginfo.width;
     for (y = 0; y < handler->imginfo.height; y++)
     {
         handler->imginfo.buff[y] = (pixel *) malloc(handler->imginfo.width * sizeof(pixel));
-        if (handler->imginfo.buff[y] == NULL)
-        {
-            printf("error. can not allocate memory\n");
-            return PPM_ERROR;
-        }
+        CHECK_ERROR((handler->imginfo.buff[y] == NULL), "error. can not allocate memory\n")
         for (x = 0; x < handler->imginfo.width; x++)
             if (getNextPixel(handler, &handler->imginfo.buff[y][x]) != 0) return PPM_ERROR;
     }
     handler->imginfo.new_width = 0;
     handler->imginfo.new_height = 0;
 
-    if (handler->filesize != handler->index_buffer)
-    {
-        printf("file format error\n");
-        return PPM_ERROR;
-    }
+    CHECK_ERROR((handler->filesize != handler->index_buffer), "file format error\n")
 
     return PPM_NOERROR;
 }
@@ -513,35 +449,18 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
 
     P = (int) ceil(k_width) + 2;
 
-    if ((indices = (int **) malloc(out_size * sizeof(int*))) == NULL)
-    {
-        printf("error. allocating indices\n");
-        return PPM_ERROR;
-    }
-
-    if ((weights = (double **) malloc(out_size * sizeof(double*))) == NULL)
-    {
-        printf("error. allocating indices\n");
-        return PPM_ERROR;
-    }
+    CHECK_ERROR(((indices = (int **) malloc(out_size * sizeof(int*))) == NULL), "error. allocating indices\n")
+    CHECK_ERROR(((weights = (double **) malloc(out_size * sizeof(double*))) == NULL), "error. allocating indices\n")
 
     for (y = 0; y < out_size; y++)
     {
         indices[y] = (int *) malloc(P * sizeof(double));
         weights[y] = (double *) malloc(P * sizeof(double));
 
-        if (indices[y] == NULL || weights[y] == NULL)
-        {
-            printf("fatal. allocating memory for weights and indices");
-            return PPM_ERROR;
-        }
+        CHECK_ERROR((indices[y] == NULL || weights[y] == NULL), "error. allocating memory for weights and indices\n")
     }
 
-    if ((aux = (int *) malloc(aux_size * (sizeof(int)))) == NULL)
-    {
-        printf("fatal. allocating memory for aux\n");
-        return - 1;
-    }            
+    CHECK_ERROR(((aux = (int *) malloc(aux_size * (sizeof(int)))) == NULL), "fatal. allocating memory for aux\n")  
 
     memset(aux, 0, aux_size);
 
@@ -600,11 +519,7 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
         if (num_non_zero < num_non_zero_t) num_non_zero = num_non_zero_t;
     }
 
-    if ((ind2store = (unsigned char*) malloc(P * sizeof(unsigned char*))) == NULL)
-	{
-		printf("error: allocating ind2store\n");
-		return PPM_ERROR;
-	}
+    CHECK_ERROR(((ind2store = (unsigned char*) malloc(P * sizeof(unsigned char*))) == NULL), "error: allocating ind2store\n")
 
     for (x = 0; x < P; x++) ind2store[x] = 0;
 
@@ -612,29 +527,13 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
         for (x = 0; x < P; x++)
             if (weights[y][x] != 0.0f) ind2store[x] = 1;
 
-	if (((*out_indices) = (int **) malloc(out_size * sizeof(int*))) == NULL)
-	{
-		printf("error: allocating out_indices\n");
-		return PPM_ERROR;
-	}
-    if (((*out_weights) = (double **) malloc(out_size * sizeof(double*))) == NULL)
-	{
-		printf("error: allocating out_weights\n");
-		return PPM_ERROR;
-	}
+	CHECK_ERROR((((*out_indices) = (int **) malloc(out_size * sizeof(int*))) == NULL), "error: allocating out_indices\n")
+    CHECK_ERROR((((*out_weights) = (double **) malloc(out_size * sizeof(double*))) == NULL), "error: allocating out_weights\n")
     
     for (y = 0; y < out_size; y++)
     {
-        if (((*out_indices)[y] = (int *) malloc(num_non_zero * sizeof(int))) == NULL)
-		{
-			printf("error: allocating out_indices\n");
-			return PPM_ERROR;
-		}
-        if (((*out_weights)[y] = (double *) malloc(num_non_zero * sizeof(double))) == NULL)
-		{
-			printf("error: allocating out_weights\n");
-			return PPM_ERROR;
-		}
+        CHECK_ERROR((((*out_indices)[y] = (int *) malloc(num_non_zero * sizeof(int))) == NULL), "error: allocating out_indices\n")
+        CHECK_ERROR((((*out_weights)[y] = (double *) malloc(num_non_zero * sizeof(double))) == NULL), "error: allocating out_weights\n")
     }
 
     for (y = 0; y < out_size; y++)
@@ -651,7 +550,7 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
         }
     }
 
-    *contrib_size = num_non_zero; // TODO: num_non_zero can be removed
+    *contrib_size = num_non_zero;
 
     for (y = 0; y < out_size; y++)
     {
@@ -671,7 +570,7 @@ void calc_rot_size(double angle,
 				   unsigned int old_width, unsigned int old_height,
 				   unsigned int *new_width, unsigned int *new_height)
 {
-    double theta1 = (angle * M_PI)/180.0; // // convert to radians
+    double theta1 = (angle * M_PI)/180.0; // convert to radians
 	*new_width = round((old_width * cos(theta1)) + (old_height * sin(theta1)));
 	*new_height = round((old_width * sin(theta1)) + (old_height * cos(theta1)));
 }	
@@ -704,7 +603,7 @@ int rotate(ppm_image_handler *handler)
 	y_offset = floor(handler->imginfo.new_height / 2) - floor(handler->imginfo.height / 2);
 
 	// 0 degree rotation: no rotation, just copy the buffer
-    if (angle == 0)
+    if (handler->angle == 0)
     {
         handler->norotate = 1;
         handler->imginfo.new_buff = handler->imginfo.buff;
@@ -718,18 +617,18 @@ int rotate(ppm_image_handler *handler)
     // 2. Faster rotation
     // 3. No need for interpolation
 
-    if (angle == 90) // rotate 90 degrees 
+    if (handler->angle == 90) // rotate 90 degrees 
         for (y = 0; y < handler->imginfo.height; y++)
             for (x = 0; x < handler->imginfo.width; x++)
                 handler->imginfo.new_buff[x][handler->imginfo.new_width - y - 1] = handler->imginfo.buff[y][x];
-    else if (angle == 180) 	// rotate 180 degrees
+    else if (handler->angle == 180) 	// rotate 180 degrees
         for (y = 0; y < handler->imginfo.height; y++)
             for (x = 0; x < handler->imginfo.width; x++)
                 handler->imginfo.new_buff[handler->imginfo.new_height - y - 1][handler->imginfo.new_width - x - 1] = handler->imginfo.buff[y][x];
-	else if (angle == 270) // rotate 270 degrees
-        for (y = 0; y < handler->imginfo.height; y++)
-            for (x = 0; x < handler->imginfo.width; x++)
-                handler->imginfo.new_buff[handler->imginfo.new_height - y - 1][x] = handler->imginfo.buff[y][x];
+	else if (handler->angle == 270) // rotate 270 degrees
+        for (y = 0; y < handler->imginfo.new_height; y++)
+            for (x = 0; x < handler->imginfo.new_width; x++)
+				handler->imginfo.new_buff[handler->imginfo.new_height - y - 1][x] = handler->imginfo.buff[x][y];
     else
     {
         for (y = 0; y < handler->imginfo.new_height; y++) memset(handler->imginfo.new_buff[y], 0x00, handler->imginfo.new_width * sizeof(pixel));
@@ -901,19 +800,11 @@ int image_buff_alloc(pixel ***new_buff, unsigned int height, unsigned int width)
 {
     int y;
 
-    if (((*new_buff) = (pixel **) malloc(height * sizeof(pixel *))) == NULL)
-	{
-		printf("can not allocate image buff for height\n");
-		return PPM_ERROR;
-	}
+    CHECK_ERROR((((*new_buff) = (pixel **) malloc(height * sizeof(pixel *))) == NULL), "can not allocate image buff for height\n")
 
     for (y = 0; y < height; y++)
     {
-        if (((*new_buff)[y] = (pixel *) malloc(width * sizeof(pixel))) == NULL)
-		{
-			printf("can not allocate image buff for width\n");
-			return PPM_ERROR;
-		}
+        CHECK_ERROR((((*new_buff)[y] = (pixel *) malloc(width * sizeof(pixel))) == NULL), "can not allocate image buff for width\n")
         memset((*new_buff)[y], 0x00, width * sizeof(pixel));
     }
 
@@ -978,33 +869,17 @@ int doProcessPPM(ppm_image_handler *handler)
 
     // initialize ppm_image_handler
     handler->filep = fopen(handler->filename, "rb");
-    if (handler->filep == NULL)
-    {
-        printf("error. can not open file: %s\n", handler->filename);
-        return PPM_ERROR;
-    }
+    CHECK_ERROR((handler->filep == NULL), "error. can not open file\n")
 
-    if (fseek(handler->filep , 0 , SEEK_END) < 0)
-    {
-        printf("error. can not set file position in fseek.\n");
-        return PPM_ERROR;
-    }
+    CHECK_ERROR((fseek(handler->filep , 0 , SEEK_END) < 0), "error. can not set file position in fseek.\n")
     
     // get file size and allocate buffer for the whole file
     handler->filesize = ftell(handler->filep);
     rewind(handler->filep);
     handler->file_buffer = (unsigned char*) malloc(sizeof(unsigned char) * handler->filesize);
-    if (handler->file_buffer == NULL)
-    {
-        printf("error. can not allocate memory\n");
-        return PPM_ERROR;
-    }
+    CHECK_ERROR((handler->file_buffer == NULL), "error. can not allocate memory\n")
     retsz = fread(handler->file_buffer, 1, handler->filesize, handler->filep);
-    if (retsz != handler->filesize)
-    {
-        printf("error in reading input file.\n");
-        return PPM_ERROR;
-    }
+    CHECK_ERROR((retsz != handler->filesize), "error in reading input file.\n")
 
     // initialize variables before parsing
     handler->index_buffer = 0;
@@ -1032,11 +907,7 @@ int doProcessPPM(ppm_image_handler *handler)
         int out_width;
         int dim;
 
-		if ((int) (handler->imginfo.new_width = handler->output_width_size) < 1)
-		{
-			printf("invalid option for width: %0d\n", handler->imginfo.new_width);
-			return PPM_ERROR;
-		}
+		CHECK_ERROR(((int) (handler->imginfo.new_width = handler->output_width_size) < 1), "invalid option for new width\n")
 
         scale[1] = (double) ((double) handler->imginfo.new_width / handler->imginfo.width);
 		handler->imginfo.new_height = ((double) handler->imginfo.height * scale[1]);
