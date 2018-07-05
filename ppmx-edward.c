@@ -1,5 +1,7 @@
 // Edward Sillador
-// 06/16/2018
+
+// * 06/16/2018 - added flip (vertical / horizontal), scale, rotation, 
+
 // * 12/2017 - initial version
 
 #include <stdio.h>
@@ -19,6 +21,9 @@
 #define FILETYPE_PPM 0
 #define FILETYPE_PGM 1
 #define FILETYPE_PBM 2
+
+// visual studio 2010 does not include round() in math.h
+#define round(val) floor(val + 0.5)
 
 typedef struct pixel {
     unsigned char r;
@@ -82,7 +87,6 @@ int image_buff_alloc(pixel ***new_buff, unsigned int height, unsigned int width)
 void calc_rot_size(double angle,
 				   unsigned int old_width, unsigned int old_height,
 				   unsigned int *new_width, unsigned int *new_height);
-double round(double val);
 int putImageToFile(ppm_image_handler *handler);
 void usage();
 void renewBuffer(ppm_image_handler *handler);
@@ -136,11 +140,6 @@ int main(int argc, char *argv[])
     if (doProcessPPM(&handler) != 0) return PPM_ERROR;
 
     return 0;
-}
-
-double round(double val)
-{    
-    return floor(val + 0.5);
 }
 
 void usage()
@@ -672,24 +671,9 @@ void calc_rot_size(double angle,
 				   unsigned int old_width, unsigned int old_height,
 				   unsigned int *new_width, unsigned int *new_height)
 {
-    double theta1; // TODO: minimize lines here
-
-    double a;
-    double b;
-    double c;
-    double d;
-    double e;
-    double f;
-    theta1 = (angle * M_PI)/180.0; // // convert to radians
-	d = old_height;
-	c = old_width;
-
-	b = c * sin(theta1);
-	a = c * cos(theta1);
-	f = d * sin(theta1);
-	e = d * cos(theta1);
-	*new_width = round(a + f);
-	*new_height = round(b + e);
+    double theta1 = (angle * M_PI)/180.0; // // convert to radians
+	*new_width = round((old_width * cos(theta1)) + (old_height * sin(theta1)));
+	*new_height = round((old_width * sin(theta1)) + (old_height * cos(theta1)));
 }	
 
 int rotate(ppm_image_handler *handler)
@@ -728,7 +712,7 @@ int rotate(ppm_image_handler *handler)
     }
     else if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == PPM_ERROR) return PPM_ERROR;
 
-    // The following are the reasons why orthogonal rotations (90,
+    // The following are the reasons  orthogonal rotations (90,
     // 180, 270) don't need to use the rotation formula:
     // 1. Prevent round-off errors
     // 2. Faster rotation
@@ -1043,13 +1027,11 @@ int doProcessPPM(ppm_image_handler *handler)
         int weights_sz[2];
         int im_sz[2];
         double scale[2];
-        int order[2];
+        int order[2] = {0,0};
         int x, y;
         int out_width;
         int dim;
 
-        printf("resize\n");
-		
 		if ((int) (handler->imginfo.new_width = handler->output_width_size) < 1)
 		{
 			printf("invalid option for width: %0d\n", handler->imginfo.new_width);
@@ -1060,16 +1042,8 @@ int doProcessPPM(ppm_image_handler *handler)
 		handler->imginfo.new_height = ((double) handler->imginfo.height * scale[1]);
         scale[0] = (double) ((double) handler->imginfo.new_height / handler->imginfo.height);
 		
-        if (scale[0] < scale[1])
-        {
-            order[0] = 0;
-            order[1] = 1;
-        }
-        else
-        {
-            order[0] = 1;
-            order[1] = 0;
-        }
+        if (scale[0] < scale[1]) order[1] = 1;
+        else order[0] = 1;
 
         if (calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &weights[0], &indices[0], &weights_sz[0]) == PPM_ERROR) return PPM_ERROR;
         if (calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &weights[1], &indices[1], &weights_sz[1]) == PPM_ERROR) return PPM_ERROR;
@@ -1102,35 +1076,30 @@ int doProcessPPM(ppm_image_handler *handler)
 
     if (handler->arg_flag.rotate_enable)
     {
-        printf("rotate\n");
         if (handler->arg_flag.resize_enable) renewBuffer(handler);
         rotate(handler);
     }
 
     if (handler->arg_flag.gray_enable)
     {
-        printf("gray\n");
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) renewBuffer(handler);
         gray(handler);
     }
         
     if (handler->arg_flag.mono_enable)
     {
-        printf("mono\n");
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) renewBuffer(handler);
         mono(handler);
     }
 
 	if (handler->arg_flag.flipv_enable)
     {
-        printf("flipv\n");
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable)  renewBuffer(handler);
         flip(handler,1);
     }
         
 	if (handler->arg_flag.fliph_enable)
     {
-        printf("fliph\n");
         if (handler->arg_flag.resize_enable || handler->arg_flag.rotate_enable) renewBuffer(handler);
         flip(handler,0);
     }
