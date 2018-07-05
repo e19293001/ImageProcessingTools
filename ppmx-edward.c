@@ -392,7 +392,7 @@ int getImageInfo(ppm_image_handler *handler)
         handler->imginfo.buff[y] = (pixel *) malloc(handler->imginfo.width * sizeof(pixel));
         CHECK_ERROR((handler->imginfo.buff[y] == NULL), "error. can not allocate memory\n")
         for (x = 0; x < handler->imginfo.width; x++)
-            if (getNextPixel(handler, &handler->imginfo.buff[y][x]) != 0) return PPM_ERROR;
+            if (getNextPixel(handler, &handler->imginfo.buff[y][x]) != PPM_NOERROR) return PPM_ERROR;
     }
     handler->imginfo.new_width = 0;
     handler->imginfo.new_height = 0;
