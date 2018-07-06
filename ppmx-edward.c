@@ -957,6 +957,7 @@ int mono(ppm_image_handler *handler)
     handler->imginfo.new_height = handler->imginfo.height;
     handler->imginfo.new_width = handler->imginfo.width;
 
+    // for improvement: no need to allocate b and g buffer here
     if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == PPM_ERROR) return PPM_ERROR;
 
 // bayer 4x4  
@@ -991,6 +992,7 @@ int gray(ppm_image_handler *handler)
     handler->imginfo.new_height = handler->imginfo.height;
     handler->imginfo.new_width = handler->imginfo.width;
 
+    // for improvement: no need to allocate b and g buffer here
     if (image_buff_alloc(&handler->imginfo.new_buff, handler->imginfo.new_height, handler->imginfo.new_width) == PPM_ERROR) return PPM_ERROR;
 
     for (y = 0; y < handler->imginfo.new_height; y++)
