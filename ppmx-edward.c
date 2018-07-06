@@ -84,9 +84,10 @@ typedef struct ppm_image_handler {
 typedef struct contributions {
     double **weights;
     int **indices;
+    int weights_sz;
 } contributions;
 
-int calc_contributions(int in_size, int out_size, double scale, double k_width, contributions *contrib, int *contrib_size);
+int calc_contributions(int in_size, int out_size, double scale, double k_width, contributions *contrib);
 int mod(int a, int b);
 double cubic(double x);
 int getNextToken(ppm_image_handler *handler, token *current_token);
@@ -417,7 +418,7 @@ int mod(int a, int b)
     return r < 0 ? r + b : r;
 }
 
-int calc_contributions(int in_size, int out_size, double scale, double k_width, contributions *contrib, int *contrib_size)
+int calc_contributions(int in_size, int out_size, double scale, double k_width, contributions *contrib)
 {
     int x = 0;
     int y = 0;
@@ -521,7 +522,7 @@ int calc_contributions(int in_size, int out_size, double scale, double k_width, 
             }
     }
 
-    *contrib_size = num_non_zero;
+    contrib->weights_sz = num_non_zero;
     contrib->indices = for_outindices;
     contrib->weights = for_outweights;
 
@@ -879,22 +880,22 @@ int doProcessPPM(ppm_image_handler *handler)
         indices[0] = NULL;
         indices[1] = NULL;
 
-        if (calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &contrib[0], &weights_sz[0]) == PPM_ERROR) return PPM_ERROR;
-        if (calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &contrib[1], &weights_sz[1]) == PPM_ERROR) return PPM_ERROR;
+        if (calc_contributions(handler->imginfo.height, handler->imginfo.new_height, scale[0], 4.0, &contrib[0]) == PPM_ERROR) return PPM_ERROR;
+        if (calc_contributions(handler->imginfo.width, handler->imginfo.new_width, scale[1], 4.0, &contrib[1]) == PPM_ERROR) return PPM_ERROR;
 
         im_sz[0] = handler->imginfo.new_height;
         im_sz[1] = handler->imginfo.new_width;
 
         out_width = handler->imginfo.new_width;
         dim = order[0];
-        if ((imresize(handler, im_sz[dim], dim, contrib[dim].weights, contrib[dim].indices, weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
+        if ((imresize(handler, im_sz[dim], dim, contrib[dim].weights, contrib[dim].indices, contrib[dim].weights_sz)) == PPM_ERROR) return PPM_ERROR;
         releaseBuffer(&handler->imginfo.buff, handler->imginfo.height);
         handler->imginfo.buff = handler->imginfo.new_buff;
         handler->imginfo.new_width = out_width;
         handler->imginfo.height = handler->imginfo.new_height;
         handler->imginfo.width = handler->imginfo.new_width;
         dim = order[1];
-        if ((imresize(handler, im_sz[dim], dim, contrib[dim].weights, contrib[dim].indices, weights_sz[dim])) == PPM_ERROR) return PPM_ERROR;
+        if ((imresize(handler, im_sz[dim], dim, contrib[dim].weights, contrib[dim].indices, contrib[dim].weights_sz)) == PPM_ERROR) return PPM_ERROR;
 
         for (x = 0; x < 2; x++) {
             for (y = 0; y < im_sz[x]; y++) {
